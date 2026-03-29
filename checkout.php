@@ -49,6 +49,7 @@ $_SESSION['commande_en_attente'] = [
     'client' => htmlspecialchars($donnees['client']),
     'tel' => htmlspecialchars($donnees['tel']),
     'heure' => htmlspecialchars($donnees['heure']),
+    'note' => htmlspecialchars($donnees['note'] ?? ''), // LA NOTE EST ICI
     'panier' => $panier_verifie
 ];
 
@@ -56,6 +57,7 @@ $stripe_data = [
     'payment_method_types' => ['card'],
     'line_items' => $line_items,
     'mode' => 'payment',
+    // ⚠️ Remplace 'localhost/resto' par ton adresse InfinityFree ici !
     'success_url' => 'http://localhost/resto/success.php?session_id={CHECKOUT_SESSION_ID}',
     'cancel_url' => 'http://localhost/resto/index.php',
 ];

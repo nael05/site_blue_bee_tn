@@ -57,7 +57,18 @@ if (isset($_GET['ajax'])) {
     }
 
     foreach ($commandes as $cmd) {
-        $panier = json_decode($cmd['details_panier'], true);
+        $panier_data = json_decode($cmd['details_panier'], true);
+        $panier = [];
+        $note = '';
+
+        // Détection de la nouvelle structure (qui contient la note) ou de l'ancienne
+        if (is_array($panier_data) && isset($panier_data['items'])) {
+            $panier = $panier_data['items'];
+            $note = $panier_data['note'] ?? '';
+        } else if (is_array($panier_data)) {
+            $panier = $panier_data;
+        }
+
         echo '<div class="order-card">';
         echo '<div class="order-header"><div class="time">' . htmlspecialchars($cmd['heure_retrait']) . '</div>';
         if ($statut === 'en attente') {
@@ -66,7 +77,14 @@ if (isset($_GET['ajax'])) {
             echo '<span style="color:var(--olive-green); font-weight:bold;">Terminée</span>';
         }
         echo '</div>';
+        
         echo '<div class="client-info"><strong>' . htmlspecialchars($cmd['client_nom']) . '</strong><br>📞 ' . htmlspecialchars($cmd['client_tel']) . '</div>';
+        
+        // AFFICHAGE DE LA NOTE POUR LA CUISINE
+        if (!empty($note)) {
+            echo '<div style="background:#fff3cd; color:#856404; padding:8px 12px; border-radius:6px; margin-bottom:15px; font-size:0.95rem; border-left:4px solid #ffeeba;"><strong>📝 Précision :</strong><br>' . nl2br(htmlspecialchars($note)) . '</div>';
+        }
+
         echo '<ul class="item-list">';
         foreach ($panier as $item) {
             echo '<li><span class="qty">' . htmlspecialchars($item['qty']) . 'x</span> ' . htmlspecialchars($item['nom']) . '</li>';
@@ -95,7 +113,6 @@ if (isset($_GET['ajax'])) {
 
         body { font-family: 'Tajawal', sans-serif; background: var(--chaux-white); margin: 0; padding-top: 130px; }
 
-        /* NAVIGATION STYLE INDEX */
         .ceramic-border {
             height: 12px; width: 100%;
             background: repeating-linear-gradient(90deg, var(--sidi-blue), var(--sidi-blue) 20px, var(--medina-gold) 20px, var(--medina-gold) 25px, var(--chaux-white) 25px, var(--chaux-white) 45px, var(--medina-gold) 45px, var(--medina-gold) 50px);

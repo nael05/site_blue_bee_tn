@@ -1,16 +1,15 @@
 <?php
 session_start();
-require_once 'config.php'; // On charge la configuration sécurisée
+require_once 'config.php';
 
 if (!isset($_GET['session_id']) || !isset($_SESSION['commande_en_attente'])) {
     header("Location: index.php");
     exit;
 }
 
-$stripe_secret = STRIPE_SECRET_KEY; // On utilise la constante de config.php
+$stripe_secret = STRIPE_SECRET_KEY;
 $session_id = $_GET['session_id'];
 
-// Vérification du paiement auprès de Stripe
 $ch = curl_init("https://api.stripe.com/v1/checkout/sessions/" . $session_id);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_USERPWD, $stripe_secret . ':');
@@ -25,7 +24,6 @@ if (!isset($session_stripe['payment_status']) || $session_stripe['payment_status
 }
 
 try {
-    // Utilisation des constantes DB de config.php
     $pdo = new PDO("mysql:host=".DB_HOST.";dbname=".DB_NAME.";charset=utf8mb4", DB_USER, DB_PASS);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 } catch (PDOException $e) {
@@ -33,7 +31,13 @@ try {
 }
 
 $c = $_SESSION['commande_en_attente'];
-$panier_json = json_encode($c['panier']);
+
+// On regroupe les plats et la note dans la même colonne pour ne pas toucher à ta base de données
+$details_panier_data = [
+    'items' => $c['panier'],
+    'note' => $c['note']
+];
+$panier_json = json_encode($details_panier_data);
 
 $stmt = $pdo->prepare("INSERT INTO commandes (client_nom, client_tel, heure_retrait, details_panier) VALUES (?, ?, ?, ?)");
 $stmt->execute([$c['client'], $c['tel'], $c['heure'], $panier_json]);

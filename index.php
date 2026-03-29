@@ -4,14 +4,8 @@ $dbname = 'db_restaurant';
 $username = 'root';
 $password = '';
 
-require_once 'config.php';
-
 try {
     $pdo = new PDO("mysql:host=".DB_HOST.";dbname=".DB_NAME.";charset=utf8mb4", DB_USER, DB_PASS);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    
-    $stmt = $pdo->query("SELECT * FROM carte_restaurant");
-    // ... le reste du code reste identique ...
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     $stmt = $pdo->query("SELECT * FROM carte_restaurant");
@@ -38,27 +32,31 @@ try {
 <head>
 <script src="https://js.stripe.com/v3/"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>BlueBeeTN - L'Âme de la Tunisie</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&family=Tajawal:wght@300;400;500;700;800&display=swap');
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  :root {
-    --sidi-blue: #0066b2;
-    --sidi-dark: #003a6c;
-    --medina-gold: #d4af37;
-    --harissa-red: #c1272d;
-    --olive-green: #5a6b31;
-    --chaux-white: #fdfbf7;
-    --terracotta: #cc7755;
-    --zellige-light: #e0f2fe;
-    --text-dark: #1a1a1a;
-    --text-muted: #555555;
+  * { 
+      margin: 0; 
+      padding: 0; 
+      box-sizing: border-box; 
   }
 
-  html { scroll-behavior: smooth; }
+  :root {
+    --sidi-blue: #005599;
+    --sidi-dark: #003a6c;
+    --medina-gold: #d4af37;
+    --harissa-red: #d32f2f;
+    --olive-green: #4caf50;
+    --chaux-white: #faf9f6;
+    --text-dark: #2c3e50;
+    --text-muted: #607d8b;
+  }
+
+  html { 
+      scroll-behavior: smooth; 
+  }
 
   body {
     font-family: 'Tajawal', sans-serif;
@@ -67,6 +65,7 @@ try {
     overflow-x: hidden;
     width: 100%;
     min-height: 100vh;
+    line-height: 1.6;
   }
 
   h1, h2, h3, .oriental-font {
@@ -76,7 +75,7 @@ try {
   .zellige-bg {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
-    opacity: 0.04;
+    opacity: 0.03;
     pointer-events: none;
     z-index: 0;
     background-image: 
@@ -88,10 +87,11 @@ try {
 
   .rub-el-hizb {
     display: inline-block;
-    width: 20px; height: 20px;
+    width: 24px; height: 24px;
     background: var(--medina-gold);
     position: relative;
-    margin: 0 10px;
+    margin: 0 15px;
+    transform: rotate(45deg);
   }
   .rub-el-hizb::before {
     content: "";
@@ -103,14 +103,14 @@ try {
   .rub-el-hizb::after {
     content: "";
     position: absolute;
-    inset: 4px;
+    inset: 5px;
     background: var(--chaux-white);
     border-radius: 50%;
     z-index: 1;
   }
 
   .ceramic-border {
-    height: 12px;
+    height: 10px;
     width: 100%;
     background: repeating-linear-gradient(
       90deg,
@@ -123,21 +123,21 @@ try {
       var(--medina-gold) 45px,
       var(--medina-gold) 50px
     );
-    border-bottom: 2px solid var(--sidi-dark);
-    box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
   }
 
   nav {
     position: fixed;
     top: 0; left: 0; right: 0;
     z-index: 1000;
-    background: rgba(253, 251, 247, 0.96);
-    backdrop-filter: blur(10px);
+    background: rgba(250, 249, 246, 0.95);
+    backdrop-filter: blur(12px);
+    transition: all 0.3s ease;
   }
 
   .nav-container {
-    padding: 0 2rem;
-    height: 80px;
+    padding: 0 3rem;
+    height: 85px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -146,49 +146,61 @@ try {
   .nav-logo {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 15px;
     text-decoration: none;
+    transition: transform 0.3s ease;
+  }
+  
+  .nav-logo:hover {
+      transform: scale(1.02);
   }
 
-  .khamsa-icon { font-size: 2.2rem; color: var(--sidi-blue); filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); }
+  .khamsa-icon { 
+      font-size: 2.5rem; 
+      color: var(--sidi-blue); 
+      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.15)); 
+  }
   
   .nav-logo span {
     font-family: 'Aref Ruqaa', serif;
-    font-size: 2.2rem;
+    font-size: 2.4rem;
     font-weight: 700;
     color: var(--sidi-dark);
-    text-shadow: 1px 1px 0px rgba(212, 175, 55, 0.5);
   }
 
   .nav-links {
     display: flex;
-    gap: 2rem;
+    gap: 2.5rem;
     list-style: none;
     align-items: center;
   }
 
   .nav-links a {
     text-decoration: none;
-    color: var(--sidi-dark);
+    color: var(--text-dark);
     font-weight: 700;
-    font-size: 1.05rem;
-    transition: all 0.3s;
+    font-size: 1.1rem;
+    transition: color 0.3s ease;
     position: relative;
-    padding: 5px 0;
+    padding: 8px 0;
   }
 
-  .nav-links a:hover { color: var(--harissa-red); }
+  .nav-links a:hover { color: var(--sidi-blue); }
+  
   .nav-links a::after {
     content: '';
     position: absolute;
     bottom: 0; left: 50%;
     width: 0; height: 3px;
-    background: var(--harissa-red);
-    transition: all 0.3s ease;
-    transform: translateX(-50%);
-    border-radius: 2px;
+    background: var(--sidi-blue);
+    transition: width 0.3s ease, left 0.3s ease;
+    border-radius: 4px;
   }
-  .nav-links a:hover::after { width: 100%; }
+  
+  .nav-links a:hover::after { 
+      width: 100%; 
+      left: 0; 
+  }
 
   .hero {
     position: relative;
@@ -196,25 +208,25 @@ try {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding-top: 100px;
-    background: radial-gradient(circle at center, var(--chaux-white) 0%, #ebe5d9 100%);
+    padding-top: 120px;
+    background: radial-gradient(circle at center, var(--chaux-white) 0%, #f0ebd8 100%);
     overflow: hidden;
   }
 
   .lantern {
     position: absolute;
-    font-size: 4rem;
-    top: 50px;
-    animation: swing 4s ease-in-out infinite alternate;
+    font-size: 4.5rem;
+    top: 60px;
+    animation: swing 5s ease-in-out infinite alternate;
     transform-origin: top center;
-    filter: drop-shadow(0 15px 15px rgba(0,0,0,0.3));
+    filter: drop-shadow(0 20px 20px rgba(0,0,0,0.25));
   }
-  .lantern.left { left: 15%; }
-  .lantern.right { right: 15%; animation-delay: 1s; }
+  .lantern.left { left: 12%; }
+  .lantern.right { right: 12%; animation-delay: 1.5s; }
 
   @keyframes swing {
-    0% { transform: rotate(-5deg); }
-    100% { transform: rotate(5deg); }
+    0% { transform: rotate(-6deg); }
+    100% { transform: rotate(6deg); }
   }
 
   .hero-content {
@@ -243,15 +255,13 @@ try {
     filter: drop-shadow(0 30px 60px rgba(0,0,0,0.35));
   }
 
-  /* Nouvelle classe pour l'image de la porte */
   .door-image {
     width: 100%;
     height: auto;
     display: block;
-    border-radius: 8px; /* Adoucit légèrement les coins si besoin */
+    border-radius: 8px;
   }
 
-  /* Floating tunisian decorative elements */
   .deco-float {
     position: absolute;
     font-size: 3.2rem;
@@ -278,65 +288,63 @@ try {
   .d-olive-mr   { top: 55%;    right: -80px; font-size: 2.6rem; animation-direction: alternate-reverse; }
 
   .hero-title {
-    font-size: clamp(3.5rem, 7vw, 5rem);
+    font-size: clamp(3.5rem, 8vw, 5.5rem);
     color: var(--sidi-dark);
-    line-height: 1;
-    margin-bottom: 0.5rem;
-    text-shadow: 2px 2px 0px rgba(255,255,255,0.8);
+    line-height: 1.1;
+    margin-bottom: 0.8rem;
+    text-shadow: 2px 2px 0px rgba(255,255,255,1);
   }
 
   .hero-subtitle {
-    font-size: clamp(1.2rem, 2.5vw, 1.6rem);
+    font-size: clamp(1.3rem, 2.5vw, 1.8rem);
     color: var(--harissa-red);
     font-weight: 700;
-    margin-bottom: 2rem;
+    margin-bottom: 2.5rem;
     font-family: 'Aref Ruqaa', serif;
   }
 
   .btn {
-    padding: 18px 40px;
-    border-radius: 8px;
+    padding: 16px 36px;
+    border-radius: 50px;
     font-family: 'Tajawal', sans-serif;
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     font-weight: 800;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     text-decoration: none;
     display: inline-flex;
     align-items: center;
-    gap: 12px;
+    gap: 15px;
     border: none;
     text-transform: uppercase;
-    letter-spacing: 2px;
-    position: relative;
-    overflow: hidden;
+    letter-spacing: 1.5px;
   }
 
   .btn-primary {
     background: var(--harissa-red);
     color: white;
-    box-shadow: 0 10px 20px rgba(193, 39, 45, 0.3);
-    border: 2px solid #9a1f24;
+    box-shadow: 0 10px 25px rgba(211, 47, 47, 0.4);
   }
+  
   .btn-primary:hover {
-    background: #a12025;
-    transform: translateY(-3px);
-    box-shadow: 0 15px 30px rgba(193, 39, 45, 0.4);
+    background: #b71c1c;
+    transform: translateY(-5px) scale(1.02);
+    box-shadow: 0 15px 35px rgba(211, 47, 47, 0.5);
   }
 
   section {
     position: relative;
     z-index: 1;
-    padding: 7rem 2rem;
+    padding: 8rem 2rem;
   }
 
   .section-header {
     text-align: center;
-    margin-bottom: 5rem;
+    margin-bottom: 4rem;
   }
 
   .section-header h2 {
-    font-size: clamp(3rem, 6vw, 4rem);
+    font-size: clamp(2.8rem, 6vw, 4.2rem);
     color: var(--sidi-dark);
     margin-bottom: 1rem;
     position: relative;
@@ -348,126 +356,126 @@ try {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    font-size: 2rem;
-    opacity: 0.8;
+    font-size: 2.2rem;
+    opacity: 0.6;
   }
-  .section-header h2::before { left: -50px; }
-  .section-header h2::after { right: -50px; transform: translateY(-50%) scaleX(-1); }
+  .section-header h2::before { left: -60px; }
+  .section-header h2::after { right: -60px; transform: translateY(-50%) scaleX(-1); }
 
   .divider-tunisian {
     display: flex;
     align-items: center;
     justify-content: center;
-    margin: 1.5rem 0;
+    margin: 1.5rem 0 2rem 0;
   }
   .divider-line {
-    width: 100px;
-    height: 3px;
+    width: 120px;
+    height: 2px;
     background: var(--medina-gold);
   }
 
   .section-header p {
     color: var(--text-muted);
-    max-width: 700px;
+    max-width: 750px;
     margin: 0 auto;
-    font-size: 1.2rem;
-    line-height: 1.7;
+    font-size: 1.25rem;
+    line-height: 1.8;
     font-weight: 500;
   }
 
   .menu-section {
-    background: #fff;
-    border-top: 2px solid var(--medina-gold);
-    border-bottom: 2px solid var(--medina-gold);
-    background-image: radial-gradient(circle at 10px 10px, rgba(0, 102, 178, 0.05) 2px, transparent 0);
+    background: #ffffff;
+    background-image: radial-gradient(circle at 10px 10px, rgba(0, 85, 153, 0.04) 2px, transparent 0);
     background-size: 40px 40px;
   }
 
   .menu-categories {
     display: flex;
     justify-content: center;
-    gap: 1.5rem;
-    margin-bottom: 4rem;
+    gap: 1rem;
+    margin-bottom: 5rem;
     flex-wrap: wrap;
   }
 
   .cat-btn {
-    padding: 12px 30px;
-    border-radius: 5px;
-    border: 2px solid var(--sidi-blue);
-    background: var(--chaux-white);
+    padding: 14px 32px;
+    border-radius: 40px;
+    border: none;
+    background: #f1f5f9;
     color: var(--sidi-dark);
     font-family: 'Tajawal', sans-serif;
     font-size: 1.1rem;
     font-weight: 700;
     cursor: pointer;
-    transition: all 0.3s;
-    box-shadow: 4px 4px 0px rgba(0, 102, 178, 0.2);
+    transition: all 0.3s ease;
   }
 
   .cat-btn.active, .cat-btn:hover {
     background: var(--sidi-blue);
     color: white;
-    transform: translate(-2px, -2px);
-    box-shadow: 6px 6px 0px rgba(212, 175, 55, 0.6);
+    transform: translateY(-3px);
+    box-shadow: 0 10px 20px rgba(0, 85, 153, 0.25);
   }
 
   .menu-grid {
-    max-width: 1200px;
+    max-width: 1300px;
     margin: 0 auto;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 3rem;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 3.5rem;
   }
 
   .alcove-card {
-    background: var(--chaux-white);
-    border-radius: 120px 120px 10px 10px;
-    padding: 3rem 1.5rem 2rem;
-    text-align: center;
-    box-shadow: 
-      inset 0 10px 20px rgba(0,0,0,0.03),
-      0 15px 35px rgba(0,0,0,0.08);
+    background: #ffffff;
+    border-radius: 140px 140px 20px 20px;
+    padding: 0 0 2rem 0;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.06);
     position: relative;
-    border: 1px solid #ebe5d9;
-    border-top: 10px solid var(--sidi-blue);
-    transition: all 0.4s;
+    border: 1px solid rgba(0,0,0,0.03);
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     display: flex;
     flex-direction: column;
     align-items: center;
   }
 
-  .alcove-card::before {
-    content: '';
-    position: absolute;
-    top: 15px; left: 15px; right: 15px; bottom: 15px;
-    border-radius: 105px 105px 5px 5px;
-    border: 2px dashed var(--medina-gold);
-    pointer-events: none;
-    opacity: 0.6;
-  }
-
   .alcove-card:hover {
-    transform: translateY(-10px);
-    border-top-color: var(--harissa-red);
-    box-shadow: 0 25px 50px rgba(0,0,0,0.12);
+    transform: translateY(-12px);
+    box-shadow: 0 25px 45px rgba(0,0,0,0.12);
   }
-
-  .card-image {
-    width: 140px;
-    height: 140px;
-    border-radius: 50%;
-    object-fit: cover;
+  
+  .card-image-wrapper {
+    width: 100%;
+    height: 240px;
+    border-radius: 140px 140px 0 0;
+    overflow: hidden;
     margin-bottom: 1.5rem;
-    border: 4px solid var(--medina-gold);
-    box-shadow: 0 10px 20px rgba(0,0,0,0.15);
     position: relative;
     z-index: 2;
   }
 
+  .card-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s ease;
+  }
+  
+  .alcove-card:hover .card-image {
+      transform: scale(1.08);
+  }
+
+  .alcove-content {
+      padding: 0 2rem;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      text-align: center;
+  }
+
   .alcove-card h4 {
     font-family: 'Aref Ruqaa', serif;
-    font-size: 1.8rem;
+    font-size: 2rem;
     color: var(--sidi-dark);
     margin-bottom: 0.8rem;
     position: relative;
@@ -475,12 +483,12 @@ try {
   }
 
   .alcove-card p {
-    font-size: 1rem;
+    font-size: 1.05rem;
     color: var(--text-muted);
     line-height: 1.6;
-    margin-bottom: 1.5rem;
-    min-height: 50px;
+    margin-bottom: 2rem;
     font-weight: 500;
+    flex: 1;
   }
 
   .alcove-card .price-row {
@@ -489,43 +497,83 @@ try {
     align-items: center;
     justify-content: space-between;
     padding-top: 1.5rem;
-    border-top: 1px solid rgba(212, 175, 55, 0.3);
+    border-top: 1px solid rgba(212, 175, 55, 0.2);
     position: relative;
     z-index: 2;
   }
 
   .alcove-card .price {
-    font-size: 1.5rem;
+    font-size: 1.8rem;
     font-weight: 800;
     color: var(--harissa-red);
     font-family: 'Aref Ruqaa', serif;
   }
 
+  .controls-container {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+  }
+
   .add-btn {
     width: 45px;
     height: 45px;
-    border-radius: 8px;
-    background: var(--sidi-blue);
-    color: white;
-    border: 2px solid var(--sidi-dark);
-    font-size: 1.5rem;
+    border-radius: 12px;
+    background: var(--chaux-white);
+    color: var(--sidi-blue);
+    border: 2px solid var(--sidi-blue);
+    font-size: 1.8rem;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: all 0.3s ease;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 3px 3px 0px var(--medina-gold);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
   }
 
   .add-btn:hover {
-    background: var(--harissa-red);
-    border-color: #9a1f24;
-    transform: translate(-2px, -2px);
-    box-shadow: 5px 5px 0px var(--medina-gold);
+    background: var(--sidi-blue);
+    color: white;
+    transform: translateY(-3px);
+    box-shadow: 0 8px 15px rgba(0, 85, 153, 0.3);
+  }
+
+  .card-qty-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--sidi-blue);
+      border-radius: 12px;
+      padding: 5px 8px;
+      box-shadow: 0 6px 15px rgba(0, 85, 153, 0.25);
+      animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  @keyframes popIn {
+      0% { transform: scale(0.8); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+  }
+
+  .ctrl-btn-card {
+      width: 34px; height: 34px;
+      border-radius: 8px; border: none;
+      background: white; cursor: pointer;
+      font-weight: bold; color: var(--sidi-dark); font-size: 1.4rem;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform 0.2s ease;
+  }
+
+  .ctrl-btn-card:hover { 
+      transform: scale(1.1); 
+  }
+
+  .qty-display {
+      font-weight: 800; font-size: 1.2rem;
+      color: white; min-width: 20px; text-align: center;
   }
 
   .specialties {
-    background: #001a33;
+    background: #0a192f;
     color: var(--chaux-white);
     position: relative;
   }
@@ -534,148 +582,161 @@ try {
     content: '';
     position: absolute;
     inset: 0;
-    background-image: radial-gradient(circle at 50% 50%, rgba(212, 175, 55, 0.05) 0%, transparent 60%);
+    background-image: radial-gradient(circle at 50% 50%, rgba(212, 175, 55, 0.08) 0%, transparent 60%);
     pointer-events: none;
   }
 
   .specialties .section-header h2 { color: var(--medina-gold); }
-  .specialties .section-header p { color: #aab8c2; }
+  .specialties .section-header p { color: #8892b0; }
 
   .spec-grid {
-    max-width: 1100px;
+    max-width: 1200px;
     margin: 0 auto;
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 3rem;
+    gap: 4rem;
   }
 
   .spec-item {
     text-align: center;
-    padding: 2rem;
+    padding: 2.5rem;
     position: relative;
+    background: rgba(255,255,255,0.03);
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.05);
+    transition: transform 0.3s ease, background 0.3s ease;
+  }
+  
+  .spec-item:hover {
+      transform: translateY(-10px);
+      background: rgba(255,255,255,0.06);
   }
 
   .spec-item .icon-wrapper {
-    width: 120px;
-    height: 120px;
-    margin: 0 auto 2rem;
-    background: rgba(0, 102, 178, 0.2);
+    width: 130px;
+    height: 130px;
+    margin: 0 auto 2.5rem;
+    background: rgba(0, 85, 153, 0.3);
     border: 3px solid var(--medina-gold);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 4rem;
+    font-size: 4.5rem;
     position: relative;
-    box-shadow: 0 0 30px rgba(212, 175, 55, 0.2);
+    box-shadow: 0 0 40px rgba(212, 175, 55, 0.15);
+    transition: transform 0.4s ease;
+  }
+  
+  .spec-item:hover .icon-wrapper {
+      transform: scale(1.1) rotate(5deg);
   }
 
   .spec-item .icon-wrapper::after {
     content: '۞';
     position: absolute;
-    bottom: -15px;
+    bottom: -20px;
     color: var(--medina-gold);
-    font-size: 1.5rem;
-    background: #001a33;
-    padding: 0 5px;
+    font-size: 1.8rem;
+    background: #0a192f;
+    padding: 0 8px;
   }
 
   .spec-item h3 { 
-    font-size: 2rem; 
+    font-size: 2.2rem; 
     color: var(--chaux-white); 
-    margin-bottom: 1rem; 
+    margin-bottom: 1.2rem; 
   }
   
   .spec-item p { 
-    color: #8c9ca8; 
-    font-size: 1.1rem; 
-    line-height: 1.6; 
+    color: #a8b2d1; 
+    font-size: 1.15rem; 
+    line-height: 1.7; 
   }
 
   .reviews {
-    background: var(--chaux-white);
-    border-top: 10px solid var(--harissa-red);
+    background: #f8f9fa;
     position: relative;
   }
 
   .review-box {
-    max-width: 850px;
+    max-width: 900px;
     margin: 0 auto;
-    background: #fff;
-    border: 2px solid var(--sidi-blue);
-    padding: 4rem;
+    background: #ffffff;
+    border-radius: 30px;
+    padding: 5rem 4rem;
     text-align: center;
     position: relative;
-    box-shadow: 15px 15px 0px rgba(0, 102, 178, 0.1);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.08);
   }
 
   .review-box::before, .review-box::after {
     content: '۞';
     position: absolute;
-    font-size: 2rem;
-    color: var(--harissa-red);
+    font-size: 2.5rem;
+    color: rgba(211, 47, 47, 0.1);
   }
-  .review-box::before { top: 10px; left: 15px; }
-  .review-box::after { bottom: 10px; right: 15px; }
+  .review-box::before { top: 20px; left: 25px; }
+  .review-box::after { bottom: 20px; right: 25px; }
 
   .nazar-icon {
     position: absolute;
-    top: -35px; left: 50%;
+    top: -45px; left: 50%;
     transform: translateX(-50%);
-    font-size: 4rem;
-    filter: drop-shadow(0 5px 10px rgba(0,0,0,0.2));
+    font-size: 4.5rem;
+    filter: drop-shadow(0 10px 15px rgba(0,0,0,0.15));
   }
 
   .stars {
-    font-size: 2rem;
+    font-size: 2.5rem;
     color: var(--medina-gold);
-    margin-bottom: 1.5rem;
-    letter-spacing: 2px;
+    margin-bottom: 2rem;
+    letter-spacing: 5px;
   }
 
   .review-text {
     font-family: 'Aref Ruqaa', serif;
-    font-size: 1.8rem;
-    line-height: 1.6;
+    font-size: 2.2rem;
+    line-height: 1.7;
     color: var(--sidi-dark);
-    margin-bottom: 2rem;
+    margin-bottom: 2.5rem;
   }
 
   .author-name {
     font-weight: 800;
     color: var(--harissa-red);
-    font-size: 1.2rem;
+    font-size: 1.3rem;
     text-transform: uppercase;
-    letter-spacing: 2px;
+    letter-spacing: 3px;
   }
 
   footer {
-    background: var(--sidi-dark);
+    background: #050d1a;
     color: var(--chaux-white);
     text-align: center;
     position: relative;
   }
 
   .footer-content {
-    padding: 5rem 2rem 3rem;
+    padding: 6rem 2rem 4rem;
     position: relative;
     z-index: 2;
   }
 
   .footer-logo {
     font-family: 'Aref Ruqaa', serif;
-    font-size: 3rem;
+    font-size: 3.5rem;
     color: var(--chaux-white);
-    margin-bottom: 1.5rem;
-    text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    margin-bottom: 2rem;
   }
   .footer-logo span { color: var(--medina-gold); }
 
   .tunisian-flag-bar {
-    width: 60px; height: 4px;
+    width: 80px; height: 5px;
     background: var(--harissa-red);
-    margin: 0 auto 2rem;
+    margin: 0 auto 2.5rem;
     position: relative;
+    border-radius: 5px;
   }
   .tunisian-flag-bar::after {
     content: '☪';
@@ -683,56 +744,59 @@ try {
     top: 50%; left: 50%;
     transform: translate(-50%, -50%);
     color: var(--harissa-red);
-    background: var(--sidi-dark);
-    padding: 0 10px;
-    font-size: 1.5rem;
+    background: #050d1a;
+    padding: 0 12px;
+    font-size: 1.8rem;
   }
 
   .cart-fab {
     position: fixed;
-    bottom: 30px; right: 30px;
-    width: 70px; height: 70px;
+    bottom: 40px; right: 40px;
+    width: 75px; height: 75px;
     border-radius: 50%;
     background: var(--harissa-red);
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2rem;
+    font-size: 2.2rem;
     cursor: pointer;
     z-index: 999;
-    box-shadow: 0 10px 20px rgba(193, 39, 45, 0.4), inset 0 0 0 2px var(--medina-gold);
-    transition: all 0.3s;
+    box-shadow: 0 10px 25px rgba(211, 47, 47, 0.4);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   }
 
-  .cart-fab:hover { transform: scale(1.1) rotate(-5deg); }
+  .cart-fab:hover { 
+      transform: scale(1.15) rotate(-8deg); 
+  }
 
   .cart-badge {
     position: absolute;
-    top: -5px; right: -5px;
-    width: 28px; height: 28px;
+    top: -2px; right: -2px;
+    width: 30px; height: 30px;
     border-radius: 50%;
-    background: var(--medina-gold);
-    color: var(--sidi-dark);
-    font-size: 0.9rem;
+    background: var(--chaux-white);
+    color: var(--harissa-red);
+    font-size: 1rem;
     font-weight: 800;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 2px solid var(--sidi-dark);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
   }
 
+  /* OPTIMISATION POUR LES ECRANS DE TELEPHONE */
   .cart-panel {
     position: fixed;
-    top: 0; right: -450px;
-    width: 400px; max-width: 100vw;
+    top: 0; right: -480px;
+    width: 450px; max-width: 100vw;
     height: 100vh;
+    height: 100dvh; /* Résout le bug de la barre de Safari / Android */
     background: var(--chaux-white);
     z-index: 1001;
-    box-shadow: -15px 0 50px rgba(0,0,0,0.5);
-    transition: right 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    box-shadow: -20px 0 60px rgba(0,0,0,0.2);
+    transition: right 0.5s cubic-bezier(0.25, 1, 0.5, 1);
     display: flex; flex-direction: column;
-    border-left: 8px solid var(--sidi-blue);
   }
 
   .cart-panel.open { right: 0; }
@@ -744,28 +808,39 @@ try {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border-bottom: 2px dashed var(--medina-gold);
+    border-bottom: 1px solid rgba(0,0,0,0.05);
   }
   
-  .cart-header h3 { font-family: 'Aref Ruqaa', serif; font-size: 2rem; }
+  .cart-header h3 { font-family: 'Aref Ruqaa', serif; font-size: 2.4rem; margin:0; }
 
   .close-cart {
-    background: none; border: none;
-    color: var(--harissa-red); font-size: 2rem;
+    background: #f1f5f9; 
+    border: none;
+    border-radius: 50%;
+    width: 45px; height: 45px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-dark); font-size: 1.5rem;
     cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  .close-cart:hover {
+      background: var(--harissa-red);
+      color: white;
+      transform: rotate(90deg);
   }
 
   .cart-body {
-    flex: 1; overflow-y: auto; padding: 1.5rem;
+    flex: 1; overflow-y: auto; padding: 2rem;
   }
 
   .cart-item {
-    display: flex; align-items: center; gap: 1rem;
-    padding: 1.5rem; margin-bottom: 1rem;
-    background: #fff;
-    border: 1px solid #eee;
-    border-radius: 8px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.03);
+    display: flex; align-items: center; gap: 1.2rem;
+    padding: 1.2rem; margin-bottom: 1rem;
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,0.03);
+    border-radius: 16px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.04);
   }
 
   .cart-item .image {
@@ -773,69 +848,133 @@ try {
     height: 60px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid var(--sidi-blue);
   }
 
   .cart-item .info { flex: 1; }
   .cart-item .title { font-weight: 800; color: var(--sidi-dark); font-size: 1.1rem; }
-  .cart-item .price { color: var(--harissa-red); font-weight: 700; font-size: 1rem; margin-top: 5px;}
+  .cart-item .price { color: var(--harissa-red); font-weight: 700; font-size: 1.1rem; margin-top: 4px;}
 
-  .cart-controls { display: flex; align-items: center; gap: 12px; }
+  .cart-controls { display: flex; align-items: center; gap: 10px; }
   .ctrl-btn {
     width: 32px; height: 32px;
-    border-radius: 5px; border: 2px solid var(--sidi-blue);
-    background: var(--chaux-white); cursor: pointer;
-    font-weight: bold; color: var(--sidi-blue); font-size: 1.2rem;
+    border-radius: 8px; border: none;
+    background: #f1f5f9; cursor: pointer;
+    font-weight: bold; color: var(--sidi-dark); font-size: 1.2rem;
+    transition: all 0.3s ease;
   }
   .ctrl-btn:hover { background: var(--sidi-blue); color: white; }
 
   .cart-footer {
     padding: 2rem;
-    border-top: 2px solid var(--medina-gold);
-    background: #fff;
+    border-top: 1px solid rgba(0,0,0,0.05);
+    background: #ffffff;
+    box-shadow: 0 -10px 20px rgba(0,0,0,0.02);
   }
 
   .cart-total {
     display: flex; justify-content: space-between;
-    font-size: 1.6rem; font-weight: 800; color: var(--sidi-dark);
+    font-size: 1.8rem; font-weight: 800; color: var(--sidi-dark);
     margin-bottom: 1.5rem; font-family: 'Aref Ruqaa', serif;
   }
 
   .btn-order {
     width: 100%; padding: 18px;
     background: var(--sidi-blue);
-    color: white; border: none; border-radius: 8px;
+    color: white; border: none; border-radius: 12px;
     font-size: 1.2rem; font-weight: 800; font-family: 'Tajawal', sans-serif;
-    cursor: pointer; transition: all 0.3s;
+    cursor: pointer; transition: all 0.3s ease;
     text-transform: uppercase; letter-spacing: 2px;
-    box-shadow: 4px 4px 0px var(--medina-gold);
+    box-shadow: 0 10px 20px rgba(0, 85, 153, 0.2);
   }
-  .btn-order:hover { background: var(--sidi-dark); transform: translate(-2px, -2px); box-shadow: 6px 6px 0px var(--medina-gold); }
+  .btn-order:hover { 
+      background: var(--sidi-dark); 
+      transform: translateY(-3px); 
+      box-shadow: 0 15px 30px rgba(0, 85, 153, 0.3); 
+  }
 
   .overlay {
     position: fixed; inset: 0;
-    background: rgba(0, 58, 108, 0.8);
-    backdrop-filter: blur(5px);
+    background: rgba(0, 26, 51, 0.6);
+    backdrop-filter: blur(8px);
     z-index: 1000; opacity: 0; pointer-events: none;
-    transition: opacity 0.3s;
+    transition: opacity 0.4s ease;
   }
   .overlay.active { opacity: 1; pointer-events: all; }
 
-  @media (max-width: 900px) {
+  /* Style des champs du formulaire */
+  input, select, textarea {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 10px;
+      border-radius: 8px;
+      border: 1px solid #e0e0e0;
+      font-family: 'Tajawal', sans-serif;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.3s;
+  }
+  
+  textarea {
+      resize: none;
+  }
+
+  input:focus, select:focus, textarea:focus {
+      border-color: var(--sidi-blue);
+  }
+
+  /* Bouton croix pour le formulaire */
+  .close-form-btn {
+      position: absolute;
+      top: 10px;
+      right: 0;
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      color: #888;
+      cursor: pointer;
+      transition: color 0.3s;
+  }
+  .close-form-btn:hover {
+      color: var(--harissa-red);
+  }
+
+  @media (max-width: 992px) {
+    .spec-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  @media (max-width: 768px) {
     .nav-links { display: none; }
     .spec-grid { grid-template-columns: 1fr; }
     .door-recess { width: 280px; height: 420px; }
     .hero-title { font-size: 3.5rem; }
+    .nav-container { padding: 0 1.5rem; }
+    section { padding: 5rem 1.5rem; }
+    .menu-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 2.5rem; }
   }
 
   @media (max-width: 600px) {
-    .alcove-card { border-radius: 90px 90px 10px 10px; }
-    .cart-panel { width: 100vw; }
-    .review-box { padding: 3rem 1.5rem; }
+    .alcove-card { border-radius: 120px 120px 15px 15px; }
+    .card-image-wrapper { height: 200px; border-radius: 112px 112px 0 0; margin-bottom: 1.2rem; }
+    .alcove-content { padding: 0 1.2rem; }
+    .cart-panel { width: 100vw; right: -100vw; }
+    .review-box { padding: 4rem 2rem; border-radius: 20px; }
+    .menu-categories { gap: 0.5rem; }
+    .cat-btn { padding: 10px 20px; font-size: 1rem; }
+    .cart-fab { bottom: 25px; right: 25px; width: 65px; height: 65px; font-size: 1.8rem; }
+    
+    /* MODIFICATIONS RESPONSIVE POUR LE PANIER */
+    .cart-header { padding: 1rem 1.2rem; }
+    .cart-body { padding: 1rem 1.2rem; }
+    .cart-footer { padding: 1rem 1.2rem; padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+    .cart-total { margin-bottom: 0.8rem; font-size: 1.4rem; }
+    .btn-order { padding: 12px; font-size: 1.1rem; }
+    /* Formulaire plus compact */
+    input, select, textarea { padding: 10px; margin-bottom: 6px; font-size: 16px; } 
+    #formClientInfo { padding-top: 10px; margin-bottom: 10px; }
   }
   
   .fade-in {
-    opacity: 0; transform: translateY(40px);
+    opacity: 0; transform: translateY(50px);
     transition: all 0.8s cubic-bezier(0.25, 0.8, 0.25, 1);
   }
   .fade-in.visible { opacity: 1; transform: translateY(0); }
@@ -869,7 +1008,6 @@ try {
   <div class="hero-content fade-in visible">
     
     <div class="door-recess">
-      <!-- Tunisian floating decorations -->
       <div class="deco-float d-jasmin-tl">🌸</div>
       <div class="deco-float d-piment-tr">🌶️</div>
       <div class="deco-float d-olive-ml">🫒</div>
@@ -877,7 +1015,6 @@ try {
       <div class="deco-float d-couffin-bl">🧺</div>
       <div class="deco-float d-jasmin-br">🌸</div>
 
-      <!-- IMAGE DE LA PORTE TUNISIENNE - Intégrée ici -->
       <div class="door-svg-wrap">
         <img src="images/image_porte_tunisienne.png" alt="Porte traditionnelle tunisienne" class="door-image">
       </div>
@@ -958,18 +1095,17 @@ try {
       « Alors là c'est une vraie pépite ! Un restau tunisien à deux pas de chez moi ! Waooo ! J'étais nostalgique et j'ai foncé direct dès l'ouverture aujourd'hui ! On retrouve vraiment le goût du bled. »
     </p>
     <div class="author-name">Essia Ait Belkacem</div>
-    <p style="color:var(--text-muted); font-size: 0.9rem; margin-top:5px; font-weight:700;">Avis Vérifié Google</p>
+    <p style="color:var(--text-muted); font-size: 0.9rem; margin-top:10px; font-weight:700;">Avis Vérifié Google</p>
   </div>
 </section>
 
 <footer>
-  <div class="ceramic-border" style="border-bottom:none; border-top:2px solid var(--sidi-dark);"></div>
   <div class="footer-content">
     <div class="footer-logo">BlueBee<span>TN</span></div>
     <div class="tunisian-flag-bar"></div>
     <p style="font-size:1.2rem; margin-bottom:1rem;">18 Rue du Maréchal Foch, 78250 Meulan-en-Yvelines</p>
     <p style="color:#8c9ca8;">Ouvert tous les jours • Restauration authentique tunisienne</p>
-    <p style="font-size:0.9rem; margin-top:3rem; opacity:0.5;">© 2026 BlueBeeTN - L'Âme de la Tunisie.</p>
+    <p style="font-size:0.9rem; margin-top:4rem; opacity:0.4;">© 2026 BlueBeeTN - L'Âme de la Tunisie.</p>
   </div>
 </footer>
 
@@ -986,29 +1122,36 @@ try {
     <button class="close-cart" onclick="toggleCart()">✕</button>
   </div>
   <div class="cart-body" id="cartBody">
-    <div style="text-align:center; padding:4rem 1rem; color:var(--text-muted);">
-      <div style="font-size:4rem; margin-bottom:1rem; opacity:0.5;">🧺</div>
-      <p style="font-size:1.2rem; font-weight:700;">Votre couffin est vide.</p>
-      <p>Remplissez-le de délices !</p>
+    <div style="text-align:center; padding:6rem 1rem; color:var(--text-muted);">
+      <div style="font-size:5rem; margin-bottom:1.5rem; opacity:0.5;">🧺</div>
+      <p style="font-size:1.4rem; font-weight:700;">Votre couffin est vide.</p>
+      <p style="margin-top:0.5rem;">Remplissez-le de délices !</p>
     </div>
   </div>
   <div class="cart-footer">
-    <div id="formClientInfo" style="display:none; margin-bottom:15px;">
-      <input type="text" id="clientNom" placeholder="Votre Nom" required style="width:100%; padding:8px; margin-bottom:10px; border-radius:4px; border:1px solid #ccc;">
-      <input type="tel" id="clientTel" placeholder="Votre Numéro" required style="width:100%; padding:8px; margin-bottom:10px; border-radius:4px; border:1px solid #ccc;">
-      <select id="clientHeure" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;"></select>
-    </div>
     <div class="cart-total">
       <span>Total</span>
       <span id="cartTotal">0,00 €</span>
     </div>
-    <button class="btn-order" onclick="commander()">Préparer ma commande</button>
+    
+    <div id="formClientInfo" style="display:none; position:relative; margin-bottom:10px; padding-top:10px; border-top: 1px dashed #e0e0e0;">
+      <button class="close-form-btn" onclick="retourPanier()" aria-label="Retour">✕</button>
+      <p style="margin-bottom: 10px; font-weight: 700; color: var(--sidi-dark); font-size: 1.1rem; padding-right: 30px;">Vos coordonnées :</p>
+      <input type="text" id="clientNom" placeholder="Votre Nom" required>
+      <input type="tel" id="clientTel" placeholder="Votre Numéro" required>
+      <select id="clientHeure"></select>
+      
+      <textarea id="clientNote" placeholder="Une précision ? (ex: sans oignons, bien cuit...)" rows="2"></textarea>
+    </div>
+    
+    <button id="btnOrderMain" class="btn-order" onclick="passerEtapeSuivante()" style="display:none;">Commandez</button>
   </div>
 </div>
 
 <script>
   const menuData = <?php echo $json_menu; ?>;
   let panier = [];
+  let etapeCommande = 1;
 
   function renderMenu(filtre = 'all') {
     const grid = document.getElementById('menuGrid');
@@ -1016,15 +1159,47 @@ try {
     
     grid.innerHTML = items.map(item => `
       <div class="alcove-card fade-in visible">
-        <img src="${item.img}" alt="${item.nom}" class="card-image" onerror="this.src='https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=300&q=80'">
-        <h4>${item.nom}</h4>
-        <p>${item.desc}</p>
-        <div class="price-row">
-          <span class="price">${item.prix.toFixed(2).replace('.', ',')} €</span>
-          <button class="add-btn" onclick="ajouter(${item.id})">+</button>
+        <div class="card-image-wrapper">
+          <img src="${item.img}" alt="${item.nom}" class="card-image" onerror="this.src='https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=400&q=80'">
+        </div>
+        <div class="alcove-content">
+          <h4>${item.nom}</h4>
+          <p>${item.desc}</p>
+          <div class="price-row">
+            <span class="price">${item.prix.toFixed(2).replace('.', ',')} €</span>
+            <div id="controls-${item.id}" class="controls-container">
+              ${getControlsHTML(item.id)}
+            </div>
+          </div>
         </div>
       </div>
     `).join('');
+  }
+
+  function getControlsHTML(id) {
+    const existant = panier.find(p => p.id === id);
+    const qty = existant ? existant.qty : 0;
+    
+    if (qty > 0) {
+      return `
+        <div class="card-qty-controls">
+          <button class="ctrl-btn-card" onclick="modifierQty(${id}, -1)">-</button>
+          <span class="qty-display">${qty}</span>
+          <button class="ctrl-btn-card" onclick="modifierQty(${id}, 1)">+</button>
+        </div>
+      `;
+    } else {
+      return `<button class="add-btn" onclick="ajouter(${id})">+</button>`;
+    }
+  }
+
+  function updateAllCardControls() {
+    menuData.forEach(item => {
+      const container = document.getElementById(`controls-${item.id}`);
+      if (container) {
+        container.innerHTML = getControlsHTML(item.id);
+      }
+    });
   }
 
   function filterMenu(cat) {
@@ -1039,17 +1214,6 @@ try {
     if (existant) existant.qty++;
     else panier.push({ ...produit, qty: 1 });
     majPanier();
-    
-    const btn = event.target;
-    const oldText = btn.innerHTML;
-    btn.innerHTML = "✓";
-    btn.style.background = "var(--olive-green)";
-    btn.style.borderColor = "var(--olive-green)";
-    setTimeout(() => {
-      btn.innerHTML = oldText;
-      btn.style.background = "";
-      btn.style.borderColor = "";
-    }, 500);
   }
 
   function modifierQty(id, delta) {
@@ -1068,21 +1232,35 @@ try {
     document.getElementById('cartCount').innerText = totalQty;
     document.getElementById('cartTotal').innerText = totalPrice.toFixed(2).replace('.', ',') + ' €';
 
+    updateAllCardControls();
+
     const body = document.getElementById('cartBody');
     const formClient = document.getElementById('formClientInfo');
+    const btnOrder = document.getElementById('btnOrderMain');
 
     if (panier.length === 0) {
       body.innerHTML = `
         <div style="text-align:center; padding:4rem 1rem; color:var(--text-muted);">
-          <div style="font-size:4rem; margin-bottom:1rem; opacity:0.5;">🧺</div>
-          <p style="font-size:1.2rem; font-weight:700;">Votre couffin est vide.</p>
-          <p>Remplissez-le de délices !</p>
+          <div style="font-size:5rem; margin-bottom:1.5rem; opacity:0.5;">🧺</div>
+          <p style="font-size:1.4rem; font-weight:700;">Votre couffin est vide.</p>
+          <p style="margin-top:0.5rem;">Remplissez-le de délices !</p>
         </div>`;
       formClient.style.display = 'none';
+      btnOrder.style.display = 'none';
+      etapeCommande = 1;
       return;
     }
 
-    formClient.style.display = 'block';
+    btnOrder.style.display = 'block';
+    
+    if (etapeCommande === 1) {
+      formClient.style.display = 'none';
+      btnOrder.innerText = 'Commandez';
+    } else {
+      formClient.style.display = 'block';
+      btnOrder.innerText = 'Valider & Payer';
+    }
+
     body.innerHTML = panier.map(item => `
       <div class="cart-item">
         <img src="${item.img}" alt="${item.nom}" class="image" onerror="this.src='https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=300&q=80'">
@@ -1092,11 +1270,25 @@ try {
         </div>
         <div class="cart-controls">
           <button class="ctrl-btn" onclick="modifierQty(${item.id}, -1)">-</button>
-          <span style="font-weight:800; font-size:1.1rem; width:20px; text-align:center;">${item.qty}</span>
+          <span style="font-weight:800; font-size:1.1rem; width:25px; text-align:center;">${item.qty}</span>
           <button class="ctrl-btn" onclick="modifierQty(${item.id}, 1)">+</button>
         </div>
       </div>
     `).join('');
+  }
+
+  function passerEtapeSuivante() {
+    if (etapeCommande === 1) {
+        etapeCommande = 2;
+        majPanier();
+    } else {
+        commander();
+    }
+  }
+
+  function retourPanier() {
+    etapeCommande = 1;
+    majPanier();
   }
 
   function preparerHoraires() {
@@ -1165,6 +1357,7 @@ try {
     const nom = document.getElementById('clientNom').value.trim();
     const tel = document.getElementById('clientTel').value.trim();
     const heure = document.getElementById('clientHeure').value;
+    const note = document.getElementById('clientNote').value.trim(); // On récupère la note
 
     if(nom === "" || tel === "") {
       alert("Veuillez renseigner votre nom et numéro de téléphone.");
@@ -1176,8 +1369,8 @@ try {
       return;
     }
     
-    const btn = document.querySelector('.btn-order');
-    btn.innerText = "Redirection vers le paiement...";
+    const btn = document.getElementById('btnOrderMain');
+    btn.innerText = "Redirection...";
     btn.disabled = true;
 
     fetch('checkout.php', {
@@ -1187,14 +1380,15 @@ try {
         panier: panier,
         client: nom,
         tel: tel,
-        heure: heure
+        heure: heure,
+        note: note // On l'envoie vers checkout.php
       })
     })
     .then(response => response.json())
     .then(session => {
       if (session.error) {
         alert("Détail de l'erreur : " + JSON.stringify(session.error));
-        btn.innerText = "Préparer ma commande";
+        btn.innerText = "Valider & Payer";
         btn.disabled = false;
       } else {
         return stripe.redirectToCheckout({ sessionId: session.id });
@@ -1202,7 +1396,7 @@ try {
     })
     .catch(error => {
       alert("Erreur de connexion avec le serveur : " + error.message);
-      btn.innerText = "Préparer ma commande";
+      btn.innerText = "Valider & Payer";
       btn.disabled = false;
     });
   }
