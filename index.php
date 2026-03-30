@@ -940,14 +940,22 @@ try {
   }
 
   @media (max-width: 768px) {
-    .nav-links { display: none; }
-    .spec-grid { grid-template-columns: 1fr; }
-    .door-recess { width: 280px; height: 420px; }
-    .hero-title { font-size: 3.5rem; }
-    .nav-container { padding: 0 1.5rem; }
-    section { padding: 5rem 1.5rem; }
-    .menu-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 2.5rem; }
-  }
+    .hero {
+        padding-top: 80px; 
+        min-height: auto;  
+    }
+    .hero-title {
+        font-size: 2.8rem;
+        margin-top: 10px;
+        margin-bottom: -10px;
+    }
+    .door-recess {
+        width: 250px; 
+        margin-top: 0;
+    }
+    .d-jasmin-tl { top: -10px; left: -20px; font-size: 2rem; }
+    .d-piment-tr { top: 0px; right: -20px; font-size: 1.8rem; }
+}
 
   @media (max-width: 600px) {
     .alcove-card { border-radius: 120px 120px 15px 15px; }
