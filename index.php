@@ -1,8 +1,5 @@
 <?php
-$host = 'localhost';
-$dbname = 'db_restaurant';
-$username = 'root';
-$password = '';
+require_once 'config.php'; 
 
 try {
     $pdo = new PDO("mysql:host=".DB_HOST.";dbname=".DB_NAME.";charset=utf8mb4", DB_USER, DB_PASS);
@@ -1002,8 +999,8 @@ try {
 </nav>
 
 <section class="hero" id="accueil">
-  <div class="lantern left">🪔</div>
-  <div class="lantern right">🪔</div>
+  <div class="lantern left">🌶️</div>
+  <div class="lantern right">🧺</div>
   
   <div class="hero-content fade-in visible">
     
@@ -1020,9 +1017,9 @@ try {
       </div>
     </div>
 
-    <h1 class="hero-title">Bienvenue au Pays<br>du Jasmin</h1>
+    <h1 class="hero-title">Bienvenue Chez<br>BlueBeeTN</h1>
     <p class="hero-subtitle">Une immersion culinaire tunisienne à Meulan-en-Yvelines</p>
-    <a href="#menu" class="btn btn-primary">Dégustez la Tradition <span>🐪</span></a>
+    <a href="#menu" class="btn btn-primary">Menu et commande à emporter <span>🐪</span></a>
   </div>
 </section>
 
@@ -1034,12 +1031,12 @@ try {
       <div class="rub-el-hizb"></div>
       <div class="divider-line"></div>
     </div>
-    <p>Des recettes ancestrales, des épices de Nabeul, de l'huile d'olive extra de Sfax. Tout est fait maison avec l'amour des grands-mères tunisiennes.</p>
+    <p>Des recettes ancestrales, des épices de tunisien, de l'huile d'olive extra. Tout est fait maison avec l'amour des grands-mères tunisiennes.</p>
   </div>
 
   <div class="menu-categories fade-in">
     <button class="cat-btn active" onclick="filterMenu('all')">La Carte Complète</button>
-    <button class="cat-btn" onclick="filterMenu('Entrées')">Kemia & Entrées</button>
+    <button class="cat-btn" onclick="filterMenu('Entrées')">Entrées</button>
     <button class="cat-btn" onclick="filterMenu('Plats Tunisiens')">Plats Mijotés</button>
     <button class="cat-btn" onclick="filterMenu('Sandwiches Tunisiens')">Sandwiches</button>
     <button class="cat-btn" onclick="filterMenu('Boissons')">Boissons & Desserts</button>
