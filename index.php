@@ -53,6 +53,7 @@ try {
 
   html { 
       scroll-behavior: smooth; 
+      overflow-x: hidden;
   }
 
   body {
@@ -61,6 +62,7 @@ try {
     color: var(--text-dark);
     overflow-x: hidden;
     width: 100%;
+    max-width: 100%;
     min-height: 100vh;
     line-height: 1.6;
   }
@@ -240,6 +242,7 @@ try {
   .door-recess {
     position: relative;
     width: 340px;
+    max-width: 100%;
     margin: 0 auto 2rem;
     display: flex;
     align-items: center;
@@ -248,7 +251,8 @@ try {
 
   .door-svg-wrap {
     position: relative;
-    width: 340px;
+    width: 550px;
+    max-width: 100%;
     filter: drop-shadow(0 30px 60px rgba(0,0,0,0.35));
   }
 
@@ -782,13 +786,12 @@ try {
     box-shadow: 0 4px 8px rgba(0,0,0,0.2);
   }
 
-  /* OPTIMISATION POUR LES ECRANS DE TELEPHONE */
   .cart-panel {
     position: fixed;
     top: 0; right: -480px;
-    width: 450px; max-width: 100vw;
+    width: 450px; max-width: 100%;
     height: 100vh;
-    height: 100dvh; /* Résout le bug de la barre de Safari / Android */
+    height: 100dvh;
     background: var(--chaux-white);
     z-index: 1001;
     box-shadow: -20px 0 60px rgba(0,0,0,0.2);
@@ -898,7 +901,6 @@ try {
   }
   .overlay.active { opacity: 1; pointer-events: all; }
 
-  /* Style des champs du formulaire */
   input, select, textarea {
       width: 100%;
       padding: 12px;
@@ -919,7 +921,6 @@ try {
       border-color: var(--sidi-blue);
   }
 
-  /* Bouton croix pour le formulaire */
   .close-form-btn {
       position: absolute;
       top: 10px;
@@ -935,45 +936,114 @@ try {
       color: var(--harissa-red);
   }
 
+  @media (min-width: 769px) {
+      .burger-menu { display: none; }
+  }
+
   @media (max-width: 992px) {
     .spec-grid { grid-template-columns: 1fr 1fr; }
   }
 
   @media (max-width: 768px) {
-    .hero {
-        padding-top: 80px; 
-        min-height: auto;  
+    .burger-menu {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-around;
+        width: 30px;
+        height: 25px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        z-index: 1100;
     }
-    .hero-title {
-        font-size: 2.8rem;
-        margin-top: 10px;
-        margin-bottom: -10px;
+
+    .burger-menu span {
+        width: 30px;
+        height: 3px;
+        background: var(--sidi-dark);
+        border-radius: 10px;
+        transition: all 0.3s ease;
     }
-    .door-recess {
-        width: 250px; 
-        margin-top: 0;
+
+    .burger-menu.active span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); }
+    .burger-menu.active span:nth-child(2) { opacity: 0; }
+    .burger-menu.active span:nth-child(3) { transform: rotate(-45deg) translate(7px, -6px); }
+
+    .nav-links {
+        display: flex; 
+        flex-direction: column;
+        position: fixed;
+        top: 85px;
+        left: 0;
+        right: 0;
+        background: rgba(250, 249, 246, 0.98);
+        padding: 2rem;
+        gap: 2rem;
+        text-align: center;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        transform: translateY(-150%); 
+        transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        z-index: 1000;
     }
-    .d-jasmin-tl { top: -10px; left: -20px; font-size: 2rem; }
-    .d-piment-tr { top: 0px; right: -20px; font-size: 1.8rem; }
-}
+
+    .nav-links.active {
+        transform: translateY(0); 
+    }
+
+    .spec-grid { grid-template-columns: 1fr; }
+    
+    .hero { 
+        padding-top: 90px; 
+        min-height: auto; 
+        padding-bottom: 2rem; 
+    }
+    
+    .hero-title { 
+        font-size: 2.5rem; 
+        margin-top: 15px; 
+        margin-bottom: 10px; 
+        line-height: 1.2;
+    }
+    
+    .door-recess { 
+        width: 220px; 
+        margin-top: 0; 
+        margin-bottom: 1rem;
+    }
+    
+    .d-jasmin-tl { top: -15px; left: -15px; font-size: 2rem; }
+    .d-jasmin-br { bottom: 10px; right: -15px; font-size: 2rem; }
+    .d-piment-tr { top: 5px; right: -15px; font-size: 1.8rem; }
+    .d-couffin-bl { bottom: -10px; left: -20px; font-size: 2.2rem; }
+    .d-olive-ml { top: 40%; left: -20px; font-size: 1.5rem; }
+    .d-olive-mr { top: 50%; right: -20px; font-size: 1.5rem; }
+    
+    .section-header h2::before { left: -25px; font-size: 1.5rem; }
+    .section-header h2::after { right: -25px; font-size: 1.5rem; }
+
+    .nav-container { padding: 0 1.5rem; }
+    section { padding: 5rem 1.5rem; }
+    .menu-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 2.5rem; }
+  }
 
   @media (max-width: 600px) {
     .alcove-card { border-radius: 120px 120px 15px 15px; }
     .card-image-wrapper { height: 200px; border-radius: 112px 112px 0 0; margin-bottom: 1.2rem; }
     .alcove-content { padding: 0 1.2rem; }
-    .cart-panel { width: 100vw; right: -100vw; }
+    
+    .cart-panel { width: 100%; right: -100%; }
+    
     .review-box { padding: 4rem 2rem; border-radius: 20px; }
     .menu-categories { gap: 0.5rem; }
     .cat-btn { padding: 10px 20px; font-size: 1rem; }
     .cart-fab { bottom: 25px; right: 25px; width: 65px; height: 65px; font-size: 1.8rem; }
     
-    /* MODIFICATIONS RESPONSIVE POUR LE PANIER */
     .cart-header { padding: 1rem 1.2rem; }
     .cart-body { padding: 1rem 1.2rem; }
     .cart-footer { padding: 1rem 1.2rem; padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
     .cart-total { margin-bottom: 0.8rem; font-size: 1.4rem; }
     .btn-order { padding: 12px; font-size: 1.1rem; }
-    /* Formulaire plus compact */
+    
     input, select, textarea { padding: 10px; margin-bottom: 6px; font-size: 16px; } 
     #formClientInfo { padding-top: 10px; margin-bottom: 10px; }
   }
@@ -997,7 +1067,14 @@ try {
       <span class="khamsa-icon">🪬</span>
       <span>BlueBeeTN</span>
     </a>
-    <ul class="nav-links">
+    
+    <button class="burger-menu" id="burgerBtn" aria-label="Menu">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+
+    <ul class="nav-links" id="navLinks">
       <li><a href="#accueil">La Médina</a></li>
       <li><a href="#menu">Notre Carte</a></li>
       <li><a href="#specialites">Héritage</a></li>
@@ -1007,18 +1084,10 @@ try {
 </nav>
 
 <section class="hero" id="accueil">
-  <div class="lantern left">🌶️</div>
-  <div class="lantern right">🧺</div>
-  
   <div class="hero-content fade-in visible">
     
     <div class="door-recess">
-      <div class="deco-float d-jasmin-tl">🌸</div>
-      <div class="deco-float d-piment-tr">🌶️</div>
-      <div class="deco-float d-olive-ml">🫒</div>
-      <div class="deco-float d-olive-mr">🫒</div>
-      <div class="deco-float d-couffin-bl">🧺</div>
-      <div class="deco-float d-jasmin-br">🌸</div>
+
 
       <div class="door-svg-wrap">
         <img src="images/image_porte_tunisienne.png" alt="Porte traditionnelle tunisienne" class="door-image">
@@ -1362,7 +1431,7 @@ try {
     const nom = document.getElementById('clientNom').value.trim();
     const tel = document.getElementById('clientTel').value.trim();
     const heure = document.getElementById('clientHeure').value;
-    const note = document.getElementById('clientNote').value.trim(); // On récupère la note
+    const note = document.getElementById('clientNote').value.trim();
 
     if(nom === "" || tel === "") {
       alert("Veuillez renseigner votre nom et numéro de téléphone.");
@@ -1386,7 +1455,7 @@ try {
         client: nom,
         tel: tel,
         heure: heure,
-        note: note // On l'envoie vers checkout.php
+        note: note
       })
     })
     .then(response => response.json())
@@ -1417,6 +1486,22 @@ try {
   window.addEventListener('scroll', verifScroll);
   renderMenu();
   verifScroll();
+
+const burgerBtn = document.getElementById('burgerBtn');
+const navLinks = document.getElementById('navLinks');
+
+burgerBtn.addEventListener('click', () => {
+    burgerBtn.classList.toggle('active');
+    navLinks.classList.toggle('active');
+});
+
+document.querySelectorAll('.nav-links a').forEach(link => {
+    link.addEventListener('click', () => {
+        burgerBtn.classList.remove('active');
+        navLinks.classList.remove('active');
+    });
+});
+
 </script>
 </body>
 </html>
