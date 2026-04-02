@@ -1722,7 +1722,7 @@ try {
 
     const periodes = [
       { hDebut: 11, mDebut: 0, hFin: 14, mFin: 0 },
-      { hDebut: 18, mDebut: 0, hFin: 20, mFin: 0 }
+      { hDebut: 18, mDebut: 0, hFin: 23, mFin: 0 }
     ];
 
     periodes.forEach(p => {

@@ -52,7 +52,28 @@ if (isset($_POST['enregistrer']) && hash_equals($_SESSION['csrf_token'], $_POST[
     $desc = $_POST['description'];
     $prix = $_POST['prix'];
     $cat = $_POST['categorie'];
-    $img = !empty($_POST['image_url']) ? $_POST['image_url'] : 'default.jpg';
+    
+    $img = 'default.jpg';
+    
+    if (!empty($_POST['id_edit'])) {
+        $stmtImg = $pdo->prepare("SELECT image_url FROM carte_restaurant WHERE id = ?");
+        $stmtImg->execute([$_POST['id_edit']]);
+        $currentImg = $stmtImg->fetchColumn();
+        if ($currentImg) {
+            $img = $currentImg;
+        }
+    }
+
+    if (isset($_FILES['image_upload']) && $_FILES['image_upload']['error'] === UPLOAD_ERR_OK) {
+        $nomFichierOriginal = basename($_FILES['image_upload']['name']);
+        $nomFichierSecurise = preg_replace('/[^a-zA-Z0-9.\-_]/', '_', $nomFichierOriginal);
+        $nomFichierFinal = time() . '_' . $nomFichierSecurise;
+        $cheminDestination = 'images/' . $nomFichierFinal;
+        
+        if (move_uploaded_file($_FILES['image_upload']['tmp_name'], $cheminDestination)) {
+            $img = $nomFichierFinal;
+        }
+    }
 
     if (!empty($_POST['id_edit'])) {
         $stmt = $pdo->prepare("UPDATE carte_restaurant SET nom=?, description=?, prix=?, categorie=?, image_url=? WHERE id=?");
@@ -94,7 +115,6 @@ $plats = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         body { font-family: 'Tajawal', sans-serif; background: var(--chaux-white); margin: 0; padding-top: 100px; }
 
-        /* NAVIGATION STYLE INDEX */
         .ceramic-border {
             height: 12px; width: 100%;
             background: repeating-linear-gradient(90deg, var(--sidi-blue), var(--sidi-blue) 20px, var(--medina-gold) 20px, var(--medina-gold) 25px, var(--chaux-white) 25px, var(--chaux-white) 45px, var(--medina-gold) 45px, var(--medina-gold) 50px);
@@ -115,7 +135,8 @@ $plats = $stmt->fetchAll(PDO::FETCH_ASSOC);
         h3 { font-family: 'Aref Ruqaa', serif; font-size: 2rem; color: var(--sidi-dark); margin: 0 0 20px 0; }
         .form-grid { display: grid; grid-template-columns: 1fr; gap: 15px; }
         @media (min-width: 768px) { .form-grid { grid-template-columns: 1fr 1fr; } }
-        input, select { padding: 12px; border: 2px solid #e0f2fe; border-radius: 8px; font-size: 1rem; width: 100%; box-sizing: border-box; outline: none; }
+        input[type="text"], input[type="number"], select { padding: 12px; border: 2px solid #e0f2fe; border-radius: 8px; font-size: 1rem; width: 100%; box-sizing: border-box; outline: none; }
+        input[type="file"] { padding: 10px; border: 2px dashed #e0f2fe; border-radius: 8px; width: 100%; box-sizing: border-box; background: #f8fafc; }
         .btn-add { background: var(--sidi-blue); color: white; border: none; padding: 15px; border-radius: 8px; font-weight: bold; font-size: 1.1rem; cursor: pointer; width: 100%; margin-top: 10px; transition: 0.3s; }
         .btn-add:hover { background: var(--sidi-dark); }
         .product-item { background: white; border-radius: 12px; padding: 15px; display: flex; align-items: center; gap: 15px; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.03); border: 1px solid #eee; }
@@ -142,7 +163,7 @@ $plats = $stmt->fetchAll(PDO::FETCH_ASSOC);
 <div class="container">
     <div class="card" id="form-container">
         <h3><?= $plat_a_modifier ? "Modifier le Trésor" : "Nouveau Plat" ?></h3>
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
             <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
             <input type="hidden" name="id_edit" value="<?= $plat_a_modifier['id'] ?? '' ?>">
             <div class="form-grid">
@@ -154,7 +175,12 @@ $plats = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <option value="<?= $c ?>" <?= ($plat_a_modifier['categorie'] ?? '') === $c ? "selected" : "" ?>><?= $c ?></option>
                     <?php endforeach; ?>
                 </select>
-                <input type="text" name="image_url" placeholder="Image (ex: brick.jpg)" value="<?= htmlspecialchars($plat_a_modifier['image_url'] ?? '') ?>" style="grid-column: 1 / -1;">
+                <div style="grid-column: 1 / -1;">
+                    <?php if($plat_a_modifier && $plat_a_modifier['image_url']): ?>
+                        <p style="margin: 0 0 10px 0; font-size: 0.9rem; color: var(--sidi-dark);">Image actuelle : <strong><?= htmlspecialchars($plat_a_modifier['image_url']) ?></strong></p>
+                    <?php endif; ?>
+                    <input type="file" name="image_upload" accept="image/*">
+                </div>
             </div>
             <button type="submit" name="enregistrer" class="btn-add"><?= $plat_a_modifier ? "Sauvegarder" : "Mettre en ligne" ?></button>
             <?php if($plat_a_modifier): ?><div style="text-align:center; margin-top:10px;"><a href="admin.php" style="color:#888; text-decoration:none;">Annuler</a></div><?php endif; ?>
