@@ -1,66 +1,116 @@
 <?php
+// --- BLINDAGE SÉCURITÉ SESSIONS & HEADERS ---
+ini_set('session.cookie_httponly', 1);
+ini_set('session.use_only_cookies', 1);
+ini_set('session.cookie_samesite', 'Lax');
+
+header('X-Frame-Options: SAMEORIGIN'); // Permet l'affichage sur son propre domaine
+header('X-Content-Type-Options: nosniff');
+header('X-XSS-Protection: 1; mode=block');
+
+session_start();
 require_once 'config.php';
 
 try {
   $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4", DB_USER, DB_PASS);
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-  $stmt = $pdo->query("SELECT * FROM carte_restaurant");
+  $stmt = $pdo->query("SELECT * FROM carte_restaurant WHERE est_disponible = 1");
   $plats_db = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
   $menu_array = [];
   foreach ($plats_db as $plat) {
+    $img_url = !empty($plat['image_url']) ? 'images/' . $plat['image_url'] : 'https://images.unsplash.com/photo-1547592180-85f173990554?w=400';
     $menu_array[] = [
       'id' => (int) $plat['id'],
       'nom' => $plat['nom'],
       'desc' => $plat['description'] ? $plat['description'] : '',
       'prix' => (float) $plat['prix'],
-      'img' => 'images/' . $plat['image_url'],
+      'img' => $img_url,
       'cat' => $plat['categorie']
     ];
   }
   $json_menu = json_encode($menu_array);
 
-  // Logic pour le Menu Interactif / Vote
-  $num_jour = (int) date('N'); // 1=Mon, 4=Thu, 5=Fri, 7=Sun
+  // Nouvelle logique Plat du Jour & Vote
+  $num_jour = (int) date('N'); // 1=Mon, 4=Thu, 5=Fri, 6=Sat, 7=Sun
   $is_vote_mode = ($num_jour >= 1 && $num_jour <= 4);
+  $plat_du_jour = null;
 
-  $noms_jours = [1 => 'Lundi', 2 => 'Mardi', 3 => 'Mercredi', 4 => 'Jeudi'];
-  $jour_db = $is_vote_mode ? $noms_jours[$num_jour] : 'Weekend';
+  if ($num_jour >= 1 && $num_jour <= 4) {
+    // Lundi à Jeudi : Plat défini manuellement
+    $noms_jours_fr = [1 => 'Lundi', 2 => 'Mardi', 3 => 'Mercredi', 4 => 'Jeudi'];
+    $jour_nom = $noms_jours_fr[$num_jour];
+    $stmtPDJ = $pdo->prepare("SELECT c.* FROM plat_du_jour p JOIN carte_restaurant c ON p.id_plat = c.id WHERE p.jour = ?");
+    $stmtPDJ->execute([$jour_nom]);
+    $plat_du_jour = $stmtPDJ->fetch(PDO::FETCH_ASSOC);
+  } else {
+    // Vendredi à Dimanche : Gagnant du vote (clôturé Jeudi 23:59)
+    $dateLundi = date('Y-m-d', strtotime('monday this week'));
+    $dateJeudi = date('Y-m-d', strtotime('thursday this week'));
+    
+    // 1. Priorité à la décision manuelle de l'admin
+    $stmtD = $pdo->prepare("SELECT plat_id FROM decisions_vote WHERE vote_date = ?");
+    $stmtD->execute([$dateJeudi]);
+    $winner_id = $stmtD->fetchColumn();
 
-  $stmtM = $pdo->prepare("SELECT * FROM menu_du_jour WHERE jour = ?");
-  $stmtM->execute([$jour_db]);
-  $daily_menu = $stmtM->fetch(PDO::FETCH_ASSOC);
-
-  // Récupération du gagnant de la veille
-  $winner_dish = null;
-  $stmtW = $pdo->query("SELECT vote_date FROM votes_menu WHERE vote_date < CURDATE() ORDER BY vote_date DESC LIMIT 1");
-  $last_vote_date = $stmtW->fetchColumn();
-
-  if ($last_vote_date) {
-    // Vérifier s'il y a une décision manuelle de l'admin
-    $stmtD = $pdo->prepare("SELECT plat_index FROM decisions_vote WHERE vote_date = ?");
-    $stmtD->execute([$last_vote_date]);
-    $forced_idx = $stmtD->fetchColumn();
-
-    if ($forced_idx) {
-      $w_idx = $forced_idx;
-    } else {
-      $stmtV = $pdo->prepare("SELECT plat_index, COUNT(*) as cnt FROM votes_menu WHERE vote_date = ? GROUP BY plat_index ORDER BY cnt DESC LIMIT 1");
-      $stmtV->execute([$last_vote_date]);
-      $winner_res = $stmtV->fetch(PDO::FETCH_ASSOC);
-      $w_idx = $winner_res ? $winner_res['plat_index'] : null;
+    if (!$winner_id) {
+        // 2. Calcul automatique du gagnant du vote
+        $stmtV = $pdo->prepare("SELECT plat_index, COUNT(*) as cnt FROM votes_menu WHERE vote_date BETWEEN ? AND ? AND plat_index IS NOT NULL GROUP BY plat_index ORDER BY cnt DESC LIMIT 1");
+        $stmtV->execute([$dateLundi, $dateJeudi]);
+        $winner_res = $stmtV->fetch(PDO::FETCH_ASSOC);
+        $winner_id = $winner_res ? $winner_res['plat_index'] : null;
     }
 
-    if ($w_idx) {
-      $w_day_num = (int) date('N', strtotime($last_vote_date));
-      $w_day_name = $noms_jours[$w_day_num] ?? 'Weekend';
-
-      $stmtM2 = $pdo->prepare("SELECT plat$w_idx as plat_name FROM menu_du_jour WHERE jour = ?");
-      $stmtM2->execute([$w_day_name]);
-      $winner_dish = $stmtM2->fetchColumn();
+    if ($winner_id) {
+        $stmtW = $pdo->prepare("SELECT * FROM carte_restaurant WHERE id = ?");
+        $stmtW->execute([$winner_id]);
+        $plat_du_jour = $stmtW->fetch(PDO::FETCH_ASSOC);
     }
   }
+
+  // Récupération des réglages de commande
+  $settings_raw = $pdo->query("SELECT * FROM commandes_settings")->fetchAll(PDO::FETCH_ASSOC);
+  $settings = [];
+  foreach ($settings_raw as $s) {
+      $settings[$s['s_key']] = $s['s_value'];
+  }
+  // Valeurs par défaut
+  $settings['morning_start'] = $settings['morning_start'] ?? '11:00';
+  $settings['morning_end'] = $settings['morning_end'] ?? '14:00';
+  $settings['evening_start'] = $settings['evening_start'] ?? '18:00';
+  $settings['evening_end'] = $settings['evening_end'] ?? '23:00';
+  $settings['slot_duration'] = (int)($settings['slot_duration'] ?? '30');
+  $settings['max_per_slot'] = (int)($settings['max_per_slot'] ?? '10');
+  $settings['is_active'] = (bool)($settings['is_active'] ?? '1');
+  $settings['closed_days'] = json_decode($settings['closed_days'] ?? '[]', true);
+
+  // Vérification fermeture aujourd'hui
+  $nom_jour_fr = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'][date('w')];
+  if (in_array($nom_jour_fr, $settings['closed_days'])) {
+      $settings['is_active'] = false;
+  }
+
+  // ID du plat du jour actuel pour le filtre JS
+  $current_pdj_id = ($plat_du_jour) ? (int)$plat_du_jour['id'] : 0;
+
+  // Récupération des options de vote actives
+  $vote_options_data = [];
+  if ($is_vote_mode) {
+    $stmtOptions = $pdo->query("SELECT c.* FROM options_vote o JOIN carte_restaurant c ON o.id_plat = c.id");
+    $vote_options_data = $stmtOptions->fetchAll(PDO::FETCH_ASSOC);
+  }
+
+  // Comptage des commandes du jour pour la capacité
+  $stmtUsage = $pdo->prepare("SELECT heure_retrait, COUNT(*) as cnt FROM commandes WHERE DATE(date_commande) = CURDATE() GROUP BY heure_retrait");
+  $stmtUsage->execute();
+  $usage_raw = $stmtUsage->fetchAll(PDO::FETCH_ASSOC);
+  $slot_usage = [];
+  foreach ($usage_raw as $u) {
+      $slot_usage[$u['heure_retrait']] = (int)$u['cnt'];
+  }
+  $json_usage = json_encode($slot_usage);
+  $json_settings = json_encode($settings);
 
 } catch (PDOException $e) {
   die("Le service est temporairement indisponible.");
@@ -117,20 +167,9 @@ try {
       font-family: 'Aref Ruqaa', serif;
     }
 
-    .zellige-bg {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      opacity: 0.03;
-      pointer-events: none;
-      z-index: 0;
-      background-image:
-        linear-gradient(45deg, var(--sidi-blue) 25%, transparent 25%, transparent 75%, var(--sidi-blue) 75%, var(--sidi-blue)),
-        linear-gradient(-45deg, var(--sidi-blue) 25%, transparent 25%, transparent 75%, var(--sidi-blue) 75%, var(--sidi-blue));
-      background-size: 60px 60px;
-      background-position: 0 0, 30px 30px;
+    /* Style de base pour un fond uni */
+    body {
+      background-color: #ffffff; /* Fond blanc uni garanti */
     }
 
     .rub-el-hizb {
@@ -469,58 +508,64 @@ try {
     }
 
     .section-header h2 {
-      font-size: clamp(2.8rem, 6vw, 4.2rem);
+      font-size: clamp(2.2rem, 5vw, 3.2rem);
       color: var(--sidi-dark);
-      margin-bottom: 1rem;
+      margin-bottom: 0.5rem;
       position: relative;
       display: inline-block;
+      font-family: 'Aref Ruqaa', serif;
+      letter-spacing: 1px;
     }
 
     .section-header h2::before,
     .section-header h2::after {
-      content: '🌿';
+      content: '❈';
       position: absolute;
       top: 50%;
       transform: translateY(-50%);
-      font-size: 2.2rem;
-      opacity: 0.6;
+      font-size: 1.8rem;
+      color: var(--medina-gold);
+      opacity: 0.8;
     }
 
     .section-header h2::before {
-      left: -60px;
+      left: -45px;
     }
 
     .section-header h2::after {
-      right: -60px;
-      transform: translateY(-50%) scaleX(-1);
+      right: -45px;
+    }
+
+    .section-header p {
+      color: var(--text-muted);
+      max-width: 800px;
+      margin: 0 auto;
+      font-size: clamp(1rem, 2vw, 1.25rem);
+      line-height: 1.6;
+      font-weight: 500;
+      opacity: 0.9;
     }
 
     .divider-tunisian {
       display: flex;
       align-items: center;
       justify-content: center;
-      margin: 1.5rem 0 2rem 0;
+      margin: 1rem 0 1.5rem 0;
+      gap: 15px;
     }
 
     .divider-line {
-      width: 120px;
+      width: clamp(50px, 15vw, 100px);
       height: 2px;
-      background: var(--medina-gold);
-    }
-
-    .section-header p {
-      color: var(--text-muted);
-      max-width: 750px;
-      margin: 0 auto;
-      font-size: 1.25rem;
-      line-height: 1.8;
-      font-weight: 500;
+      background: linear-gradient(90deg, transparent, var(--medina-gold), transparent);
     }
 
     .menu-section {
-      background: #ffffff;
-      background-image: radial-gradient(circle at 10px 10px, rgba(0, 85, 153, 0.04) 2px, transparent 0);
-      background-size: 40px 40px;
+      background: #fafaf8;
+    }
+
+    .zellige-pattern {
+      background-color: #ffffff;
     }
 
     .menu-categories {
@@ -529,6 +574,20 @@ try {
       gap: 1rem;
       margin-bottom: 5rem;
       flex-wrap: wrap;
+    }
+
+    @media (max-width: 768px) {
+      .menu-categories {
+        justify-content: flex-start;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding: 0 1.5rem 1rem 1.5rem;
+        margin-bottom: 3rem;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+      }
+      .menu-categories::-webkit-scrollbar { display: none; }
+      .cat-btn { padding: 10px 24px; font-size: 1rem; white-space: nowrap; }
     }
 
     .cat-btn {
@@ -570,7 +629,7 @@ try {
       transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       display: flex;
       flex-direction: column;
-      align-items: center;
+      height: 100%;
     }
 
     .alcove-card:hover {
@@ -606,6 +665,7 @@ try {
       flex-direction: column;
       flex: 1;
       text-align: center;
+      justify-content: space-between;
     }
 
     .alcove-card h4 {
@@ -731,11 +791,165 @@ try {
     }
 
     .specialties::before {
-      content: '';
+      display: none;
+    }
+
+    /* Plat du Jour Premium */
+    /* Plat du Jour Premium - Overhaul */
+    .pdj-section {
+      background: var(--chaux-white);
+      padding: 4rem 1rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .pdj-container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 30px;
+      display: flex;
+      flex-wrap: wrap;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0, 85, 153, 0.08);
+      border: 1px solid rgba(212, 175, 55, 0.1);
+    }
+
+    .pdj-image-col {
+      flex: 1 1 400px;
+      height: 400px;
+      position: relative;
+    }
+
+    .pdj-image-col img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .pdj-badge {
       position: absolute;
-      inset: 0;
-      background-image: radial-gradient(circle at 50% 50%, rgba(212, 175, 55, 0.08) 0%, transparent 60%);
-      pointer-events: none;
+      top: 20px;
+      left: 20px;
+      background: var(--medina-gold);
+      color: white;
+      padding: 8px 20px;
+      border-radius: 50px;
+      font-weight: 800;
+      font-size: 0.9rem;
+      z-index: 5;
+      box-shadow: 0 5px 15px rgba(212, 175, 55, 0.3);
+    }
+
+    .pdj-info-col {
+      flex: 1 1 400px;
+      padding: 3rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      background: white;
+    }
+
+    .pdj-title {
+      font-family: 'Aref Ruqaa', serif;
+      font-size: 2.8rem;
+      color: var(--sidi-dark);
+      margin-bottom: 1rem;
+      line-height: 1.2;
+    }
+
+    .pdj-desc {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      margin-bottom: 2rem;
+      line-height: 1.6;
+    }
+
+    .pdj-meta {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .pdj-price {
+      font-size: 1.8rem;
+      font-weight: 900;
+      color: var(--sidi-blue);
+    }
+
+    @media (max-width: 768px) {
+      .pdj-info-col { padding: 2rem; }
+      .pdj-title { font-size: 2rem; }
+      .pdj-image-col { height: 300px; }
+    }
+
+    /* Vote UI Update */
+    .vote-section {
+      background: white;
+      padding: 4rem 1rem;
+    }
+
+    .vote-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 3rem;
+      max-width: 1200px;
+      margin: 3rem auto;
+    }
+
+    .vote-card-premium {
+      border: 2px solid var(--medina-gold);
+      background: white;
+      border-radius: 140px 140px 30px 30px;
+      overflow: hidden;
+      box-shadow: 0 15px 40px rgba(0,0,0,0.08);
+      transition: all 0.4s ease;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 520px; /* Assure un alignement visuel minimum */
+    }
+
+    .vote-card-premium:hover {
+      transform: translateY(-10px);
+      box-shadow: 0 25px 60px rgba(212, 175, 55, 0.2);
+    }
+
+    .vote-card-premium .alcove-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      text-align: center;
+      padding: 1.5rem 2rem 2.5rem 2rem;
+      background: white;
+      justify-content: space-between;
+    }
+
+    .vote-card-premium .alcove-content p {
+      flex: 1;
+      margin-bottom: 2rem;
+    }
+
+    .btn-vote-card {
+      background: var(--sidi-blue);
+      color: white;
+      border: none;
+      padding: 15px 40px;
+      border-radius: 50px;
+      font-weight: 800;
+      cursor: pointer;
+      margin-top: 1.5rem;
+      transition: all 0.3s;
+      width: 100%;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .btn-vote-card:hover {
+      background: var(--sidi-dark);
+      transform: scale(1.05);
+      box-shadow: 0 10px 20px rgba(0, 85, 153, 0.3);
     }
 
     .specialties .section-header h2 {
@@ -812,7 +1026,7 @@ try {
     }
 
     .reviews {
-      background: #f8f9fa;
+      background: #fafafa;
       position: relative;
       overflow: hidden;
     }
@@ -868,6 +1082,7 @@ try {
 
     .review-box {
       width: 500px;
+      max-width: 85vw;
       background: #ffffff;
       border-radius: 30px;
       padding: 4rem 3rem;
@@ -1202,40 +1417,74 @@ try {
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     }
 
+    @keyframes staggered-slide {
+      from { transform: translateX(30px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    @keyframes shimmer-gold {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+
     .cart-panel {
       position: fixed;
       top: 0;
-      right: -480px;
-      width: 450px;
+      right: -550px;
+      width: 480px;
       max-width: 100%;
       height: 100vh;
       height: 100dvh;
-      background: var(--chaux-white);
+      background: rgba(253, 251, 247, 0.98);
+      backdrop-filter: blur(25px);
       z-index: 1001;
-      box-shadow: -20px 0 60px rgba(0, 0, 0, 0.2);
-      transition: right 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+      box-shadow: -15px 0 60px rgba(0, 0, 0, 0.15);
+      transition: all 0.7s cubic-bezier(0.19, 1, 0.22, 1);
       display: flex;
       flex-direction: column;
+      border-left: 2px solid rgba(212, 175, 55, 0.3);
+      background-image: radial-gradient(circle at 2px 2px, rgba(212, 175, 55, 0.03) 1px, transparent 0);
+      background-size: 24px 24px;
     }
 
     .cart-panel.open {
       right: 0;
     }
+    
+    @media (max-width: 600px) {
+        .cart-panel { width: 100%; right: -100%; border-left: none; }
+    }
 
     .cart-header {
       padding: 2rem;
-      background: var(--chaux-white);
+      background: transparent;
       color: var(--sidi-dark);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+      border-bottom: 3px solid rgba(212, 175, 55, 0.15);
+      position: relative;
     }
 
     .cart-header h3 {
       font-family: 'Aref Ruqaa', serif;
-      font-size: 2.4rem;
+      font-size: 2.35rem;
       margin: 0;
+      background: linear-gradient(
+        to right,
+        #bf953f,
+        #fcf6ba,
+        #b38728,
+        #fbf5b7,
+        #aa771c
+      );
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      color: transparent;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      animation: shimmer-gold 8s linear infinite;
+      background-size: 200% auto;
     }
 
     .close-cart {
@@ -1259,110 +1508,194 @@ try {
       transform: rotate(90deg);
     }
 
-    .cart-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: 2rem;
+    .results-container {
+       background: #fdfbf7;
+       border: 2px solid var(--medina-gold);
+       border-radius: 20px;
+       padding: 3rem;
+       max-width: 900px;
+       margin: 0 auto;
+       box-shadow: 0 15px 35px rgba(212, 175, 55, 0.1);
+       position: relative;
+       overflow: hidden;
+    }
+
+    .results-container::before {
+       content: '🧿';
+       position: absolute;
+       top: -10px;
+       right: -10px;
+       font-size: 5rem;
+       opacity: 0.05;
+    }
+
+    .result-bar-item {
+      margin-bottom: 2rem;
+    }
+
+    .result-label {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-weight: 700;
+      color: var(--sidi-dark);
+      font-size: 1.1rem;
+    }
+
+    .bar-bg {
+      height: 14px;
+      background: #e2e8f0;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    @media (max-width: 600px) {
+       .results-container { padding: 1.5rem; }
+       .result-label { font-size: 0.95rem; }
     }
 
     .cart-item {
       display: flex;
       align-items: center;
-      gap: 1.2rem;
-      padding: 1.2rem;
-      margin-bottom: 1rem;
-      background: #ffffff;
-      border: 1px solid rgba(0, 0, 0, 0.03);
-      border-radius: 16px;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.04);
+      gap: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+      background: white;
+      border-radius: 18px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+      border: 1px solid rgba(212, 175, 55, 0.08);
+      transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+      animation: staggered-slide 0.5s cubic-bezier(0.19, 1, 0.22, 1) both;
+      animation-delay: calc(var(--d, 0) * 0.1s);
+      flex-wrap: nowrap; /* Force horizontal */
+      overflow: hidden;
+    }
+    .cart-item:hover { 
+      transform: translateY(-5px) scale(1.02); 
+      box-shadow: 0 12px 30px rgba(212, 175, 55, 0.12);
+      border-color: rgba(212, 175, 55, 0.2);
     }
 
     .cart-item .image {
-      width: 60px;
-      height: 60px;
-      border-radius: 50%;
+      width: 55px;
+      height: 55px;
+      border-radius: 10px;
       object-fit: cover;
+      flex-shrink: 0; /* Ne pas rétrécir la photo */
+      box-shadow: 0 4px 8px rgba(0,0,0,0.08);
     }
 
-    .cart-item .info {
-      flex: 1;
-    }
+    .cart-item .info { flex: 1; }
 
     .cart-item .title {
       font-weight: 800;
       color: var(--sidi-dark);
-      font-size: 1.1rem;
+      font-size: 1.05rem;
+      margin-bottom: 2px;
     }
 
     .cart-item .price {
       color: var(--harissa-red);
-      font-weight: 700;
+      font-weight: 800;
       font-size: 1.1rem;
-      margin-top: 4px;
     }
 
     .cart-controls {
       display: flex;
       align-items: center;
-      gap: 10px;
+      background: #f1f5f9;
+      border-radius: 12px;
+      padding: 3px;
+      gap: 5px;
     }
 
     .ctrl-btn {
       width: 32px;
       height: 32px;
-      border-radius: 8px;
+      border-radius: 9px;
       border: none;
-      background: #f1f5f9;
+      background: white;
       cursor: pointer;
-      font-weight: bold;
-      color: var(--sidi-dark);
+      font-weight: 900;
+      color: var(--sidi-blue);
       font-size: 1.2rem;
-      transition: all 0.3s ease;
+      transition: 0.2s;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
-    .ctrl-btn:hover {
-      background: var(--sidi-blue);
-      color: white;
-    }
+    .ctrl-btn:hover { background: var(--sidi-blue); color: white; transform: scale(1.05); }
 
     .cart-footer {
       padding: 2rem;
-      border-top: 1px solid rgba(0, 0, 0, 0.05);
-      background: #ffffff;
-      box-shadow: 0 -10px 20px rgba(0, 0, 0, 0.02);
+      border-top: 2px solid rgba(212, 175, 55, 0.1);
+      background: var(--glass-white);
+      box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.03);
     }
 
     .cart-total {
       display: flex;
       justify-content: space-between;
-      font-size: 1.8rem;
+      font-size: 2.2rem;
       font-weight: 800;
-      color: var(--sidi-dark);
+      color: var(--sidi-blue);
       margin-bottom: 1.5rem;
       font-family: 'Aref Ruqaa', serif;
     }
 
     .btn-order {
       width: 100%;
-      padding: 18px;
-      background: var(--sidi-blue);
+      padding: 22px;
+      background: linear-gradient(135deg, var(--sidi-blue), var(--sidi-dark));
       color: white;
       border: none;
-      border-radius: 12px;
-      font-size: 1.2rem;
-      font-weight: 800;
+      border-radius: 18px;
+      font-size: 1.25rem;
+      font-weight: 900;
       font-family: 'Tajawal', sans-serif;
       cursor: pointer;
-      transition: all 0.3s ease;
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       text-transform: uppercase;
-      letter-spacing: 2px;
-      box-shadow: 0 10px 20px rgba(0, 85, 153, 0.2);
+      letter-spacing: 3px;
+      box-shadow: 0 12px 30px rgba(0, 85, 153, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-order::after {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: linear-gradient(
+        to right,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.3) 50%,
+        rgba(255, 255, 255, 0) 100%
+      );
+      transform: rotate(30deg);
+      transition: 0.5s;
+      animation: silk-shimmer 4s infinite;
+    }
+
+    @keyframes silk-shimmer {
+      0% { transform: translateX(-150%) rotate(30deg); }
+      100% { transform: translateX(150%) rotate(30deg); }
     }
 
     .btn-order:hover {
       background: var(--sidi-dark);
-      transform: translateY(-3px);
-      box-shadow: 0 15px 30px rgba(0, 85, 153, 0.3);
+      transform: translateY(-6px) scale(1.01);
+      box-shadow: 0 20px 40px rgba(0, 85, 153, 0.45);
     }
 
     .overlay {
@@ -1564,6 +1897,11 @@ try {
       .nav-container {
         padding: 0 1.5rem;
       }
+      .cart-fab { bottom: 20px; right: 20px; width: 65px; height: 65px; font-size: 1.8rem; }
+      .menu-grid { gap: 2rem; }
+      .alcove-card { border-radius: 100px 100px 20px 20px; }
+      .card-image-wrapper { border-radius: 100px 100px 0 0; height: 200px; }
+      }
 
       section {
         padding: 5rem 1.5rem;
@@ -1590,6 +1928,79 @@ try {
         bottom: 2%;
         left: 2%;
         font-size: 2rem;
+      }
+    }
+
+    @media (max-width: 1024px) {
+      .nav-links {
+        display: none;
+      }
+      
+      .burger-menu {
+        display: flex;
+      }
+      
+      .nav-links.active {
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        background: white;
+        padding: 100px 2rem;
+        z-index: 1500;
+        gap: 2rem;
+        align-items: center;
+        box-shadow: -10px 0 30px rgba(0,0,0,0.1);
+      }
+      
+      .nav-links.active li a {
+        font-size: 2rem;
+        color: var(--sidi-dark);
+      }
+      
+      .spec-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 2rem;
+      }
+      
+      .pdj-container {
+        flex-direction: column;
+        gap: 2rem;
+      }
+      
+      .pdj-image-col {
+        min-width: 100%;
+        height: 350px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      section {
+        padding: 4rem 1.5rem;
+      }
+      
+      .hero-title {
+        font-size: clamp(3rem, 12vw, 5rem);
+      }
+      
+      .hero-subtitle {
+        font-size: 1.2rem;
+      }
+      
+      .spec-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .vote-grid {
+        grid-template-columns: 1fr !important;
+      }
+      
+      .review-box {
+        width: 290px;
+        padding: 3rem 1.5rem;
       }
     }
 
@@ -1713,14 +2124,17 @@ try {
       padding: 3rem;
       border-radius: 30px;
       box-shadow: 0 20px 50px rgba(0, 0, 0, 0.08);
-      border: 2px solid var(--medina-gold);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+      border: 1px solid rgba(212, 175, 55, 0.2);
     }
 
     .vote-title {
       font-family: 'Aref Ruqaa', serif;
-      font-size: 2.5rem;
-      color: var(--sidi-dark);
-      margin-bottom: 1rem;
+      font-size: clamp(2.5rem, 6vw, 4rem);
+      color: var(--sidi-blue);
+      text-align: center;
+      margin-bottom: 0.5rem;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.05);
     }
 
     .vote-subtitle {
@@ -1923,7 +2337,7 @@ try {
 
 <body>
 
-  <div class="zellige-bg"></div>
+  <!-- Fond uni sans motifs -->
 
   <nav>
     <div class="ceramic-border"></div>
@@ -1962,73 +2376,100 @@ try {
     </div>
   </section>
 
-  <!-- Section Menu Interactif / Vote -->
-  <section class="vote-section" id="menu-interactif">
-    <div class="vote-card fade-in">
-      <?php if ($winner_dish): ?>
-        <div class="winner-banner">
-          <div class="winner-text">
-            <h5>Plat du jour:</h5>
-            <p><?= htmlspecialchars($winner_dish) ?></p>
+  <?php if ($plat_du_jour): ?>
+    <section id="plat-du-jour" class="pdj-section">
+      <div class="section-header fade-in">
+        <h2 style="font-size: 3.2rem;">Le Trésor du Jour</h2>
+        <div class="divider-tunisian">
+          <div class="divider-line"></div>
+          <div class="rub-el-hizb"></div>
+          <div class="divider-line"></div>
+        </div>
+        <p>Chaque jour, une immersion unique dans la gastronomie tunisienne.</p>
+      </div>
+
+      <div class="pdj-container fade-in">
+        <div class="pdj-image-col">
+          <div class="pdj-badge">✨ Star du Jour</div>
+          <img src="<?= !empty($plat_du_jour['image_url']) ? 'images/'.htmlspecialchars($plat_du_jour['image_url']) : 'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=800&q=80' ?>" 
+               alt="<?= htmlspecialchars($plat_du_jour['nom']) ?>"
+               onerror="this.src='https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=800&q=80'">
+        </div>
+        <div class="pdj-info-col">
+          <h3 class="pdj-title"><?= htmlspecialchars($plat_du_jour['nom']) ?></h3>
+          <p class="pdj-desc"><?= htmlspecialchars($plat_du_jour['description']) ?></p>
+          <div class="pdj-meta">
+            <span class="pdj-price"><?= number_format($plat_du_jour['prix'], 2, ',', ' ') ?> €</span>
+            <a href="#menu" class="btn btn-primary" onclick="filterMenu('pdj', event)" style="padding: 10px 25px; font-size: 1rem;">Commander<span>🛒</span></a>
           </div>
         </div>
-      <?php endif; ?>
+      </div>
+    </section>
+  <?php endif; ?>
 
       <?php if ($is_vote_mode): ?>
-        <h2 class="vote-title">Votez pour celui de demain !</h2>
-        <p class="vote-subtitle">Choisissez votre plat préféré pour demain
-        </p>
-
-        <div id="vote-options-ui">
-          <div class="vote-options">
-            <?php for ($i = 1; $i <= 3; $i++):
-              $p_name = $daily_menu["plat$i"] ?? '';
-              if (!$p_name)
-                continue;
-              ?>
-              <div class="vote-opt" onclick="openVoteModal(<?= $i ?>, '<?= addslashes($p_name) ?>')">
-                <h4><?= htmlspecialchars($p_name) ?></h4>
-                <span class="vote-btn-mini">Voter</span>
-              </div>
-            <?php endfor; ?>
-          </div>
-        </div>
-
-        <div id="vote-results-ui" class="results-container">
-          <h3 style="font-family: 'Aref Ruqaa', serif; margin-bottom:1.5rem; color:var(--sidi-blue);">Résultats en Direct
-          </h3>
-          <?php for ($i = 1; $i <= 3; $i++):
-            $p_name = $daily_menu["plat$i"] ?? '';
-            if (!$p_name)
-              continue;
-            ?>
-            <div class="result-bar-item">
-              <div class="result-label">
-                <span><?= htmlspecialchars($p_name) ?></span>
-                <span id="percentage-<?= $i ?>">0%</span>
-              </div>
-              <div class="bar-bg">
-                <div class="bar-fill" id="bar-<?= $i ?>"></div>
-              </div>
+        <?php if (!empty($vote_options_data)): ?>
+          <div class="section-header fade-in">
+            <h2 class="vote-title">Votez pour Demain !</h2>
+            <div class="divider-tunisian">
+              <div class="divider-line"></div>
+              <div class="rub-el-hizb"></div>
+              <div class="divider-line"></div>
             </div>
-          <?php endfor; ?>
-          <p style="font-size: 0.9rem; color: var(--text-muted); text-align: center; margin-top: 1rem;">Merci pour votre
-            vote !</p>
-        </div>
+            <p class="vote-subtitle">Définissez la saveur de votre prochaine journée</p>
+          </div>
+
+          <div id="vote-options-ui">
+            <div class="vote-grid">
+              <?php foreach ($vote_options_data as $option): ?>
+                <div class="vote-card-premium fade-in">
+                  <div class="card-image-wrapper" style="height: 280px; border-bottom: 3px solid var(--medina-gold); position: relative;">
+                    <img src="images/<?= htmlspecialchars((string)($option['image_url'] ?? '')) ?>" alt="<?= htmlspecialchars((string)($option['nom'] ?? '')) ?>" class="card-image" onerror="this.src='https://images.unsplash.com/photo-1547592180-85f173990554?w=400'">
+                  </div>
+                  <div class="alcove-content">
+                    <h4 style="margin-bottom: 1rem; font-family: 'Aref Ruqaa', serif; font-size: 1.8rem; color: var(--sidi-dark);"><?= htmlspecialchars((string)($option['nom'] ?? '')) ?></h4>
+                    <p style="font-size: 1rem; color: var(--text-muted); line-height: 1.5;"><?= htmlspecialchars((string)($option['description'] ?? '')) ?></p>
+                    <button class="btn-vote-card" onclick="openVoteModal(<?= (int)$option['id'] ?>, '<?= addslashes((string)($option['nom'] ?? '')) ?>')" style="width: auto; padding: 12px 40px; margin-top: auto;">
+                      Voter 
+                    </button>
+                  </div>
+                </div>
+              <?php endforeach; ?>
+            </div>
+            <div style="text-align: center; margin-top: 2rem;">
+              <button class="btn-vote-card" onclick="showResults()" style="background: transparent; border: 2px solid var(--sidi-blue); color: var(--sidi-blue); width: auto; padding: 10px 30px;">Consulter les résultats en direct 📊</button>
+            </div>
+          </div>
+
+          <div id="vote-results-ui" class="results-container">
+            <h3 style="font-family: 'Aref Ruqaa', serif; margin-bottom:1.5rem; color:var(--sidi-blue); text-align: center; font-size: 2.2rem;">Résultats en Direct 📊</h3>
+            <?php foreach ($vote_options_data as $option): ?>
+              <div class="result-bar-item">
+                <div class="result-label">
+                  <span><?= htmlspecialchars($option['nom']) ?></span>
+                  <span id="percentage-<?= $option['id'] ?>">0%</span>
+                </div>
+                <div class="bar-bg">
+                  <div class="bar-fill" id="bar-<?= $option['id'] ?>"></div>
+                </div>
+              </div>
+            <?php endforeach; ?>
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 2rem; align-items: center;">
+              <button class="btn-vote-card" onclick="backToVote()" style="background: transparent; border: 2px solid var(--sidi-blue); color: var(--sidi-blue); width: auto; padding: 10px 30px;">Retourner au vote ↩️</button>
+              <p style="font-size: 0.9rem; color: var(--text-muted); text-align: center;">Merci pour votre participation !</p>
+            </div>
+          </div>
+        <?php else: ?>
+          <h2 class="vote-title">Système de Vote</h2>
+          <p class="vote-subtitle">Aucun plat n'a encore été sélectionné pour le vote cette semaine.</p>
+        <?php endif; ?>
       <?php else: ?>
         <h2 class="vote-title">Menu du Week-end 🕌</h2>
         <p class="vote-subtitle">Découvrez nos suggestions gourmandes de cette fin de semaine.</p>
         <div class="vote-options" style="pointer-events:none;">
-          <?php for ($i = 1; $i <= 3; $i++):
-            $p_name = $daily_menu["plat$i"] ?? '';
-            if (!$p_name)
-              continue;
-            ?>
-            <div class="vote-opt" style="border-color: var(--medina-gold); background:white;">
-              <h4><?= htmlspecialchars($p_name) ?></h4>
-              <p style="color:var(--harissa-red); font-weight:700;">Disponible</p>
-            </div>
-          <?php endfor; ?>
+          <?php 
+          ?>
+           <p class="vote-subtitle">Le système de vote est ouvert du Lundi au Jeudi. Profitez de notre sélection spéciale du week-end !</p>
         </div>
       <?php endif; ?>
     </div>
@@ -2047,7 +2488,7 @@ try {
     </div>
   </div>
 
-  <section class="reviews" id="avis">
+  <section class="reviews zellige-pattern" id="avis">
     <div class="section-header fade-in">
       <h2>Paroles d'Invités</h2>
       <div class="divider-tunisian">
@@ -2131,11 +2572,12 @@ try {
     </div>
 
     <div class="menu-categories fade-in">
-      <button class="cat-btn active" onclick="filterMenu('all')">La Carte Complète</button>
-      <button class="cat-btn" onclick="filterMenu('Entrées')">Entrées</button>
-      <button class="cat-btn" onclick="filterMenu('Plats Tunisiens')">Plats Mijotés</button>
-      <button class="cat-btn" onclick="filterMenu('Sandwiches Tunisiens')">Sandwiches</button>
-      <button class="cat-btn" onclick="filterMenu('Boissons')">Boissons & Desserts</button>
+      <button class="cat-btn active" data-cat="all" onclick="filterMenu('all', event)">La Carte Complète</button>
+      <button class="cat-btn" data-cat="pdj" onclick="filterMenu('pdj', event)" style="border-color: var(--medina-gold); color: var(--sidi-blue); font-weight: 800;">✨ Plat du jour</button>
+      <button class="cat-btn" data-cat="Entrées" onclick="filterMenu('Entrées', event)">Entrées</button>
+      <button class="cat-btn" data-cat="Plats Tunisiens" onclick="filterMenu('Plats Tunisiens', event)">Plats Mijotés</button>
+      <button class="cat-btn" data-cat="Sandwiches Tunisiens" onclick="filterMenu('Sandwiches Tunisiens', event)">Sandwiches</button>
+      <button class="cat-btn" data-cat="Boissons" onclick="filterMenu('Boissons', event)">Boissons & Desserts</button>
     </div>
 
     <div class="menu-grid" id="menuGrid">
@@ -2348,13 +2790,12 @@ try {
 
   <script>
     const menuData = <?php echo $json_menu; ?>;
+    const currentPdjId = <?php echo $current_pdj_id; ?>;
     let panier = [];
     let etapeCommande = 1;
 
-    function renderMenu(filtre = 'all') {
+    function renderMenu(items) {
       const grid = document.getElementById('menuGrid');
-      const items = filtre === 'all' ? menuData : menuData.filter(i => i.cat === filtre);
-
       grid.innerHTML = items.map(item => `
       <div class="alcove-card fade-in visible">
         <div class="card-image-wrapper">
@@ -2400,10 +2841,40 @@ try {
       });
     }
 
-    function filterMenu(cat) {
+    function filterMenu(cat, event = null) {
+      // Gestion de la classe active
       document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
-      event.target.classList.add('active');
-      renderMenu(cat);
+      
+      const targetBtn = document.querySelector(`.cat-btn[data-cat="${cat}"]`);
+      if (targetBtn) {
+        targetBtn.classList.add('active');
+      } else if (event) {
+        // Fallback si pas de data-cat mais event présent
+        event.target.classList.add('active');
+      }
+
+      let items = [];
+      if (cat === 'all') {
+        items = menuData;
+      } else if (cat === 'pdj') {
+        // Recherche du plat du jour dans les données chargées
+        items = menuData.filter(i => i.id == currentPdjId);
+        
+        // Si non trouvé dans menuData (ex: en rupture), on reste sur le message d'indisponibilité
+        if (items.length === 0) {
+          document.getElementById('menuGrid').innerHTML = `
+            <div style="grid-column: 1 / -1; text-align:center; padding:5rem 2rem; background:white; border-radius:20px; box-shadow:0 10px 30px rgba(0,0,0,0.05); border: 1px dashed var(--medina-gold);">
+              <div style="font-size:4rem; margin-bottom:1rem;">🥘</div>
+              <h3 style="font-family:'Aref Ruqaa',serif; color:var(--sidi-dark); font-size:2rem; margin-bottom:1rem;">Plat du Jour Indisponible</h3>
+              <p style="color:var(--text-muted); font-size:1.1rem;">Le plat du jour est actuellement victime de son succès ou indisponible à la commande.</p>
+              <button onclick="filterMenu('all', null)" class="btn-vote-card" style="max-width:250px; margin-top:1.5rem;">Cliquer ici pour voir la suite</button>
+            </div>`;
+          return;
+        }
+      } else {
+        items = menuData.filter(i => i.cat === cat);
+      }
+      renderMenu(items);
     }
 
     function ajouter(id) {
@@ -2461,20 +2932,78 @@ try {
         btnOrder.innerText = 'Valider & Payer';
       }
 
-      body.innerHTML = panier.map(item => `
-      <div class="cart-item">
-        <img src="${item.img}" alt="${item.nom}" class="image" onerror="this.src='https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=300&q=80'">
-        <div class="info">
-          <div class="title">${item.nom}</div>
-          <div class="price">${(item.prix * item.qty).toFixed(2).replace('.', ',')} €</div>
+      body.innerHTML = panier.map((item, index) => `
+        <div class="cart-item" style="--d: ${index}">
+          <img src="${item.img}" alt="${item.nom}" class="image" onerror="this.src='https://images.unsplash.com/photo-1547592180-85f173990554?w=400'">
+          <div class="info">
+            <div class="title">${item.nom}</div>
+            <div class="price">${(item.prix * item.qty).toFixed(2).replace('.', ',')} €</div>
+          </div>
+          <div class="cart-controls">
+            <button class="ctrl-btn" onclick="modifierQty(${item.id}, -1)">–</button>
+            <span style="font-weight:800; min-width:20px; text-align:center;">${item.qty}</span>
+            <button class="ctrl-btn" onclick="modifierQty(${item.id}, 1)">+</button>
+          </div>
         </div>
-        <div class="cart-controls">
-          <button class="ctrl-btn" onclick="modifierQty(${item.id}, -1)">-</button>
-          <span style="font-weight:800; font-size:1.1rem; width:25px; text-align:center;">${item.qty}</span>
-          <button class="ctrl-btn" onclick="modifierQty(${item.id}, 1)">+</button>
-        </div>
-      </div>
-    `).join('');
+      `).join('');
+    }
+
+    function preparerHoraires() {
+      const select = document.getElementById('clientHeure');
+      select.innerHTML = '';
+      
+      if (!orderSettings.is_active) {
+        select.innerHTML = '<option value="">Commandes indisponibles</option>';
+        return;
+      }
+
+      const now = new Date();
+      const minTime = new Date(now.getTime() + 30 * 60000); // 30 mins mini
+      
+      const periodes = [];
+      if (orderSettings.morning_start && orderSettings.morning_end) {
+        periodes.push({ start: orderSettings.morning_start, end: orderSettings.morning_end });
+      }
+      if (orderSettings.evening_start && orderSettings.evening_end) {
+        periodes.push({ start: orderSettings.evening_start, end: orderSettings.evening_end });
+      }
+
+      const slotDur = parseInt(orderSettings.slot_duration);
+      const limit = parseInt(orderSettings.max_per_slot);
+
+      periodes.forEach(p => {
+        let [hS, mS] = p.start.split(':').map(Number);
+        let [hE, mE] = p.end.split(':').map(Number);
+
+        let iter = new Date(now);
+        iter.setHours(hS, mS, 0, 0);
+        
+        let fin = new Date(now);
+        fin.setHours(hE, mE, 0, 0);
+
+        while (iter <= fin) {
+          if (iter > minTime) {
+            const timeStr = iter.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
+            const used = slotUsage[timeStr] || 0;
+            
+            const opt = document.createElement('option');
+            opt.value = timeStr;
+            
+            if (used >= limit) {
+               opt.text = `${timeStr} (Complet 🛑)`;
+               opt.disabled = true;
+            } else {
+               opt.text = timeStr;
+            }
+            select.appendChild(opt);
+          }
+          iter.setMinutes(iter.getMinutes() + slotDur);
+        }
+      });
+      
+      if (select.options.length === 0) {
+        select.innerHTML = '<option value="">Aucun créneau disponible</option>';
+      }
     }
 
     function passerEtapeSuivante() {
@@ -2491,54 +3020,6 @@ try {
       majPanier();
     }
 
-    function preparerHoraires() {
-      const select = document.getElementById('clientHeure');
-      select.innerHTML = '';
-      const now = new Date();
-
-      const minTime = new Date(now.getTime() + 30 * 60000);
-      const creneaux = [];
-      let isOuvertMaintenant = false;
-
-      const periodes = [
-        { hDebut: 11, mDebut: 0, hFin: 14, mFin: 0 },
-        { hDebut: 18, mDebut: 0, hFin: 23, mFin: 0 }
-      ];
-
-      periodes.forEach(p => {
-        let debut = new Date(now);
-        debut.setHours(p.hDebut, p.mDebut, 0, 0);
-
-        let fin = new Date(now);
-        fin.setHours(p.hFin, p.mFin, 0, 0);
-
-        if (now >= debut && now <= fin) {
-          isOuvertMaintenant = true;
-        }
-
-        let current = new Date(debut);
-        while (current <= fin) {
-          if (current >= minTime) {
-            const h = current.getHours().toString().padStart(2, '0');
-            const m = current.getMinutes().toString().padStart(2, '0');
-            creneaux.push(`${h}:${m}`);
-          }
-          current.setMinutes(current.getMinutes() + 15);
-        }
-      });
-
-      if (creneaux.length === 0 && !isOuvertMaintenant) {
-        select.innerHTML = '<option value="">Fermé pour aujourd\'hui</option>';
-      } else {
-        if (isOuvertMaintenant) {
-          select.innerHTML = '<option value="Au plus vite">Au plus vite</option>';
-        }
-        creneaux.forEach(c => {
-          select.innerHTML += `<option value="${c}">${c}</option>`;
-        });
-      }
-    }
-
     function toggleCart() {
       const panel = document.getElementById('cartPanel');
       panel.classList.toggle('open');
@@ -2549,7 +3030,10 @@ try {
       }
     }
 
-    const stripe = Stripe('<?php echo STRIPE_PUBLIC_KEY; ?>');
+    const jsonMenu = <?= $json_menu ?>;
+    const orderSettings = <?= $json_settings ?>;
+    const slotUsage = <?= $json_usage ?>;
+    const stripe = Stripe('<?= STRIPE_PUBLIC_KEY ?>');
 
     function commander() {
       if (panier.length === 0) return;
@@ -2610,23 +3094,25 @@ try {
     }
 
     window.addEventListener('scroll', verifScroll);
-    renderMenu();
     verifScroll();
 
+    // Sécurisation du Menu Mobile
     const burgerBtn = document.getElementById('burgerBtn');
     const navLinks = document.getElementById('navLinks');
 
-    burgerBtn.addEventListener('click', () => {
-      burgerBtn.classList.toggle('active');
-      navLinks.classList.toggle('active');
-    });
-
-    document.querySelectorAll('.nav-links a').forEach(link => {
-      link.addEventListener('click', () => {
-        burgerBtn.classList.remove('active');
-        navLinks.classList.remove('active');
+    if (burgerBtn && navLinks) {
+      burgerBtn.addEventListener('click', () => {
+        burgerBtn.classList.toggle('active');
+        navLinks.classList.toggle('active');
       });
-    });
+
+      document.querySelectorAll('.nav-links a').forEach(link => {
+        link.addEventListener('click', () => {
+          burgerBtn.classList.remove('active');
+          navLinks.classList.remove('active');
+        });
+      });
+    }
 
     // Logique Vote Interactif
     let currentVotedIndex = null;
@@ -2660,10 +3146,32 @@ try {
         const result = await response.json();
 
         if (result.success) {
+          const d = new Date();
+          const day = d.getDay() || 7;
+          d.setDate(d.getDate() + 4 - day);
+          const year = d.getFullYear();
+          const week = Math.ceil((((d - new Date(year, 0, 1)) / 86400000) + 1) / 7);
+          const weekId = year + '_W' + week;
+          
+          localStorage.setItem('hasVoted_' + weekId, 'true');
           closeVoteModal();
           showResults();
         } else {
-          alert(result.error || 'Une erreur est survenue.');
+          if (result.error && result.error.includes('déjà voté')) {
+            // Synchronisation si le serveur dit qu'on a déjà voté
+            const d = new Date();
+            const day = d.getDay() || 7;
+            d.setDate(d.getDate() + 4 - day);
+            const year = d.getFullYear();
+            const week = Math.ceil((((d - new Date(year, 0, 1)) / 86400000) + 1) / 7);
+            const weekId = year + '_W' + week;
+            localStorage.setItem('hasVoted_' + weekId, 'true');
+            
+            closeVoteModal();
+            showResults();
+          } else {
+            alert(result.error || 'Une erreur est survenue.');
+          }
         }
       } catch (e) {
         alert('Erreur de connexion au serveur.');
@@ -2685,19 +3193,50 @@ try {
             const span = document.getElementById(`percentage-${idx}`);
             if (bar && span) {
               const val = data.percentages[idx];
-              bar.style.width = val + '%';
+              // On laisse un petit délai pour l'animation
+              setTimeout(() => {
+                bar.style.width = val + '%';
+              }, 100);
               span.innerText = val + '%';
             }
           });
         }
-      } catch (e) { console.error(e); }
+      } catch (e) {
+        console.error(e);
+      }
     }
 
-    // Afficher les résultats si on a déjà voté (facultatif, ici on le fait au clic)
-    // On pourrait aussi ajouter une vérification par localStorage pour masquer les options si déjà voté
-    if (localStorage.getItem('hasVotedToday') === new Date().toLocaleDateString()) {
-      // showResults();
+    function backToVote() {
+      document.getElementById('vote-results-ui').style.display = 'none';
+      document.getElementById('vote-options-ui').style.display = 'block';
     }
+
+    // Au chargement du site
+    window.addEventListener('load', () => {
+       // Retour en haut au refresh
+       if ('scrollRestoration' in history) {
+         history.scrollRestoration = 'manual';
+       }
+       window.scrollTo(0, 0);
+
+       // Déjà voté cette semaine ?
+       const d = new Date();
+       const day = d.getDay() || 7;
+       d.setDate(d.getDate() + 4 - day);
+       const year = d.getFullYear();
+       const week = Math.ceil((((d - new Date(year, 0, 1)) / 86400000) + 1) / 7);
+       const weekId = year + '_W' + week;
+       
+       const hasVoted = localStorage.getItem('hasVoted_' + weekId);
+       const isVoteMode = <?= $is_vote_mode ? 'true' : 'false' ?>;
+       
+       if (hasVoted && isVoteMode) {
+          showResults();
+       }
+       
+       // Initialisation de la carte
+       filterMenu('all');
+    });
 
   </script>
 </body>

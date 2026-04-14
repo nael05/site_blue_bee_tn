@@ -1,4 +1,9 @@
 <?php
+// --- BLINDAGE SÉCURITÉ SESSIONS & HEADERS ---
+ini_set('session.cookie_httponly', 1);
+ini_set('session.use_only_cookies', 1);
+ini_set('session.cookie_samesite', 'Lax'); // Crucial pour le retour de Stripe
+
 session_start();
 require_once 'config.php';
 

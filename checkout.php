@@ -1,4 +1,9 @@
 <?php
+// --- BLINDAGE SÉCURITÉ SESSIONS & HEADERS ---
+ini_set('session.cookie_httponly', 1);
+ini_set('session.use_only_cookies', 1);
+ini_set('session.cookie_samesite', 'Lax'); // Crucial pour le retour de Stripe
+
 session_start();
 
 require_once 'config.php';
@@ -15,6 +20,43 @@ try {
 
 
 $donnees = json_decode(file_get_contents('php://input'), true);
+
+// --- VÉRIFICATION CAPACITÉ & HORAIRES ---
+$settings_raw = $pdo->query("SELECT * FROM commandes_settings")->fetchAll(PDO::FETCH_ASSOC);
+$settings = [];
+foreach ($settings_raw as $s) {
+    $settings[$s['s_key']] = $s['s_value'];
+}
+$settings['max_per_slot'] = (int)($settings['max_per_slot'] ?? 10);
+$settings['is_active'] = (bool)($settings['is_active'] ?? true);
+$settings['closed_days'] = json_decode($settings['closed_days'] ?? '[]', true);
+
+// 1. Statut global
+if (!$settings['is_active']) {
+    http_response_code(403);
+    die(json_encode(['error' => "Désolé, les commandes sont actuellement désactivées."]));
+}
+
+// 2. Jour de fermeture
+$nom_jour_fr = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'][date('w')];
+if (in_array($nom_jour_fr, $settings['closed_days'])) {
+    http_response_code(403);
+    die(json_encode(['error' => "Le restaurant est fermé aujourd'hui."]));
+}
+
+// 3. Capacité du créneau
+$heure_choisie = htmlspecialchars($donnees['heure'] ?? '');
+if ($heure_choisie && $heure_choisie !== 'Au plus vite') {
+    $stmtC = $pdo->prepare("SELECT COUNT(*) FROM commandes WHERE DATE(date_commande) = CURDATE() AND heure_retrait = ?");
+    $stmtC->execute([$heure_choisie]);
+    $deja_commandes = $stmtC->fetchColumn();
+    
+    if ($deja_commandes >= $settings['max_per_slot']) {
+        http_response_code(403);
+        die(json_encode(['error' => "Le créneau de $heure_choisie est désormais complet. Merci d'en choisir un autre."]));
+    }
+}
+// ----------------------------------------
 
 if (!$donnees || empty($donnees['panier'])) {
     http_response_code(400);
