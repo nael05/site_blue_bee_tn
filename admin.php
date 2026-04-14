@@ -36,6 +36,7 @@ if (!isset($_SESSION['admin_logged_in'])) {
 try {
     $pdo = new PDO("mysql:host=".DB_HOST.";dbname=".DB_NAME.";charset=utf8mb4", DB_USER, DB_PASS);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $noms_jours = [1 => 'Lundi', 2 => 'Mardi', 3 => 'Mercredi', 4 => 'Jeudi'];
 } catch (PDOException $e) {
     die("Le service est temporairement indisponible.");
 }
@@ -94,6 +95,73 @@ if (isset($_POST['supprimer']) && hash_equals($_SESSION['csrf_token'], $_POST['c
     exit;
 }
 
+if (isset($_POST['sauvegarder_menu']) && hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+    $jours = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Weekend'];
+    foreach ($jours as $j) {
+        $p1 = $_POST["plat1_$j"] ?? '';
+        $p2 = $_POST["plat2_$j"] ?? '';
+        $p3 = $_POST["plat3_$j"] ?? '';
+        $stmt = $pdo->prepare("INSERT INTO menu_du_jour (jour, plat1, plat2, plat3) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE plat1=?, plat2=?, plat3=?");
+        $stmt->execute([$j, $p1, $p2, $p3, $p1, $p2, $p3]);
+    }
+    header("Location: admin.php?success=menu");
+    exit;
+}
+
+if (isset($_POST['trancher_vote']) && hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+    $v_date = $_POST['vote_date'];
+    $p_idx = (int)$_POST['plat_index'];
+    $stmt = $pdo->prepare("INSERT INTO decisions_vote (vote_date, plat_index) VALUES (?, ?) ON DUPLICATE KEY UPDATE plat_index=?");
+    $stmt->execute([$v_date, $p_idx, $p_idx]);
+    header("Location: admin.php?success=tranchage");
+    exit;
+}
+
+// Détection des égalités (Dates des 7 derniers jours)
+$conflits = [];
+$stmtC = $pdo->query("SELECT vote_date, plat_index, COUNT(*) as vc FROM votes_menu WHERE vote_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) GROUP BY vote_date, plat_index");
+$all_votes = $stmtC->fetchAll(PDO::FETCH_ASSOC);
+
+$grouped_votes = [];
+foreach ($all_votes as $v) {
+    if (!isset($grouped_votes[$v['vote_date']])) $grouped_votes[$v['vote_date']] = [];
+    $grouped_votes[$v['vote_date']][$v['plat_index']] = (int)$v['vc'];
+}
+
+foreach ($grouped_votes as $date => $counts) {
+    if (empty($counts)) continue;
+    $max = max($counts);
+    $winners = array_keys($counts, $max);
+    
+    if (count($winners) > 1) {
+        // Vérifier si déjà tranché
+        $stmtD = $pdo->prepare("SELECT plat_index FROM decisions_vote WHERE vote_date = ?");
+        $stmtD->execute([$date]);
+        $decision = $stmtD->fetchColumn();
+        
+        // Si une décision a déjà été prise, on ne considère plus cela comme un conflit actif
+        if ($decision) continue;
+        
+        $day_num = (int)date('N', strtotime($date));
+        $day_name = $noms_jours[$day_num] ?? 'Weekend';
+
+        $conflits[] = [
+            'date' => $date,
+            'winners' => $winners,
+            'decision' => $decision,
+            'day_name' => $day_name,
+            'counts' => $counts
+        ];
+    }
+}
+
+$stmtMenu = $pdo->query("SELECT * FROM menu_du_jour");
+$menus_brut = $stmtMenu->fetchAll(PDO::FETCH_ASSOC);
+$menus = [];
+foreach ($menus_brut as $m) {
+    $menus[$m['jour']] = $m;
+}
+
 $stmt = $pdo->query("SELECT * FROM carte_restaurant ORDER BY categorie, nom");
 $plats = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
@@ -145,6 +213,23 @@ $plats = $stmt->fetchAll(PDO::FETCH_ASSOC);
         .actions { display: flex; gap: 8px; }
         .btn-edit { background: var(--medina-gold); color: white; padding: 8px 12px; border-radius: 6px; text-decoration: none; font-size: 0.8rem; font-weight: bold; }
         .btn-del { background: var(--harissa-red); color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.8rem; }
+        
+        .menu-config-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        @media (min-width: 992px) { .menu_config_grid { grid-template-columns: repeat(2, 1fr); } }
+        .day-block { background: #f8fafc; padding: 15px; border-radius: 10px; border: 1px solid #e2e8f0; }
+        .day-block h4 { margin: 0 0 10px 0; color: var(--sidi-blue); border-bottom: 2px solid var(--medina-gold); display: inline-block; padding-bottom: 2px; }
+        .day-block .inputs { display: flex; flex-direction: column; gap: 8px; }
+        .day-block input { background: white; }
+        .weekend-block { border-color: var(--harissa-red); background: #fff5f5; }
+        .weekend-block h4 { color: var(--harissa-red); border-bottom-color: var(--harissa-red); }
+
+        .conflit-card { border-top-color: var(--harissa-red); animation: pulse-border 2s infinite; }
+        @keyframes pulse-border { 0% { border-top-color: var(--harissa-red); } 50% { border-top-color: #ff8e91; } 100% { border-top-color: var(--harissa-red); } }
+        .conflit-item { background: #fff5f5; padding: 15px; border-radius: 12px; margin-top: 15px; border: 1px solid #fee2e2; }
+        .conflit-options { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+        .btn-tranch { background: white; border: 2px solid var(--harissa-red); color: var(--harissa-red); padding: 8px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn-tranch.active { background: var(--harissa-red); color: white; }
+        .btn-tranch:hover:not(.active) { background: #fee2e2; }
     </style>
 </head>
 <body>
@@ -156,11 +241,40 @@ $plats = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <span class="khamsa-icon">🪬</span>
             <span>BlueBeeTN Admin</span>
         </a>
-        <a href="?logout=1" style="color: var(--harissa-red); text-decoration: none; font-weight: bold;">Quitter ✖</a>
+        <div style="display: flex; gap: 20px; align-items: center;">
+            <a href="admin.php" style="text-decoration: none; color: var(--sidi-dark); font-weight: bold;">Plats</a>
+            <a href="?logout=1" style="color: var(--harissa-red); text-decoration: none; font-weight: bold;">Quitter ✖</a>
+        </div>
     </div>
 </nav>
 
 <div class="container">
+    <?php if (!empty($conflits)): ?>
+        <div class="card conflit-card">
+            <h3 style="color: var(--harissa-red);">⚠️ Égalités à Trancher</h3>
+            <p style="color: #666; font-size: 0.9rem;">Plusieurs plats ont obtenu le même nombre de votes. Choisissez le gagnant pour que le bon plat s'affiche sur le site.</p>
+            
+            <?php foreach ($conflits as $c): ?>
+                <div class="conflit-item">
+                    <strong>Vote du <?= date('d/m', strtotime($c['date'])) ?> (Menu <?= $c['day_name'] ?>)</strong>
+                    <div class="conflit-options">
+                        <?php foreach ($c['winners'] as $idx): 
+                            $name = $menus[$c['day_name']]["plat$idx"] ?? "Plat $idx";
+                        ?>
+                            <form method="post" style="display: inline;">
+                                <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+                                <input type="hidden" name="vote_date" value="<?= $c['date'] ?>">
+                                <input type="hidden" name="plat_index" value="<?= $idx ?>">
+                                <button type="submit" name="trancher_vote" class="btn-tranch <?= ($c['decision'] == $idx) ? 'active' : '' ?>">
+                                    <?= htmlspecialchars($name) ?> (<?= $c['counts'][$idx] ?> voix)
+                                </button>
+                            </form>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
     <div class="card" id="form-container">
         <h3><?= $plat_a_modifier ? "Modifier le Trésor" : "Nouveau Plat" ?></h3>
         <form method="post" enctype="multipart/form-data">
@@ -184,6 +298,43 @@ $plats = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </div>
             <button type="submit" name="enregistrer" class="btn-add"><?= $plat_a_modifier ? "Sauvegarder" : "Mettre en ligne" ?></button>
             <?php if($plat_a_modifier): ?><div style="text-align:center; margin-top:10px;"><a href="admin.php" style="color:#888; text-decoration:none;">Annuler</a></div><?php endif; ?>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>Menu Interactif & Vote</h3>
+        <p style="margin-bottom: 20px; color: #666; font-size: 0.95rem;">Configurez les plats du jour pour le système de vote (Lun-Jeu) et l'affichage du week-end (Ven-Dim).</p>
+        <form method="post">
+            <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
+            <div class="menu-config-grid">
+                <?php 
+                $jours_affichage = [
+                    'Lundi' => 'Lundi', 
+                    'Mardi' => 'Mardi', 
+                    'Mercredi' => 'Mercredi', 
+                    'Jeudi' => 'Jeudi'
+                ];
+                foreach ($jours_affichage as $code => $label): ?>
+                    <div class="day-block">
+                        <h4><?= $label ?></h4>
+                        <div class="inputs">
+                            <input type="text" name="plat1_<?= $code ?>" placeholder="Plat Option 1" value="<?= htmlspecialchars($menus[$code]['plat1'] ?? '') ?>">
+                            <input type="text" name="plat2_<?= $code ?>" placeholder="Plat Option 2" value="<?= htmlspecialchars($menus[$code]['plat1'] ?? '') ?>">
+                            <input type="text" name="plat3_<?= $code ?>" placeholder="Plat Option 3" value="<?= htmlspecialchars($menus[$code]['plat1'] ?? '') ?>">
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+                
+                <div class="day-block weekend-block">
+                    <h4>Week-end (Ven-Dim)</h4>
+                    <div class="inputs">
+                        <input type="text" name="plat1_Weekend" placeholder="Plat Week-end 1" value="<?= htmlspecialchars($menus['Weekend']['plat1'] ?? '') ?>">
+                        <input type="text" name="plat2_Weekend" placeholder="Plat Week-end 2" value="<?= htmlspecialchars($menus['Weekend']['plat1'] ?? '') ?>">
+                        <input type="text" name="plat3_Weekend" placeholder="Plat Week-end 3" value="<?= htmlspecialchars($menus['Weekend']['plat1'] ?? '') ?>">
+                    </div>
+                </div>
+            </div>
+            <button type="submit" name="sauvegarder_menu" class="btn-add" style="background: var(--sidi-dark);">Enregistrer le Menu Hebdomadaire</button>
         </form>
     </div>
 
