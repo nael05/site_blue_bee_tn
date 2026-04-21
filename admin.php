@@ -616,6 +616,10 @@ if (!empty($all_votes)) {
                     <div class="day-block">
                         <h4 style="margin-bottom: 15px; border-bottom: 2px solid var(--sidi-blue); display: inline-block;">Capacité & Production</h4>
                         <div style="margin-bottom: 15px;">
+                            <label style="display:block; font-size: 0.8rem; font-weight: 800; margin-bottom: 5px;">INTERVALLE DES CRÉNEAUX (min)</label>
+                            <input type="number" name="slot_duration" value="<?= $settings['slot_duration'] ?? 30 ?>" title="Temps entre chaque créneau (ex: 15, 30, 45...)">
+                        </div>
+                        <div style="margin-bottom: 15px;">
                             <label style="display:block; font-size: 0.8rem; font-weight: 800; margin-bottom: 5px;">RÉDUCTION DOUBLONS (min)</label>
                             <input type="number" name="reduction_temps_doublon" value="<?= $settings['reduction_temps_doublon'] ?? 0 ?>" title="Gain de temps pour chaque plat identique supplémentaire">
                         </div>
