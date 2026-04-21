@@ -110,12 +110,16 @@ if (isset($_POST['enregistrer']) && hash_equals($_SESSION['csrf_token'], $_POST[
         }
     }
 
+    $temps_prep = $_POST['temps_prep_min'] ?? 5;
+    $type_stock = $_POST['type_stock'] ?? 'infini';
+    $stock_actuel = $_POST['stock_actuel'] ?? 0;
+
     if (!empty($_POST['id_edit'])) {
-        $stmt = $pdo->prepare("UPDATE carte_restaurant SET nom=?, description=?, prix=?, categorie=?, image_url=? WHERE id=?");
-        $stmt->execute([$nom, $desc, $prix, $cat, $img, $_POST['id_edit']]);
+        $stmt = $pdo->prepare("UPDATE carte_restaurant SET nom=?, description=?, prix=?, categorie=?, image_url=?, temps_prep_min=?, type_stock=?, stock_actuel=? WHERE id=?");
+        $stmt->execute([$nom, $desc, $prix, $cat, $img, $temps_prep, $type_stock, $stock_actuel, $_POST['id_edit']]);
     } else {
-        $stmt = $pdo->prepare("INSERT INTO carte_restaurant (nom, description, prix, categorie, image_url) VALUES (?, ?, ?, ?, ?)");
-        $stmt->execute([$nom, $desc, $prix, $cat, $img]);
+        $stmt = $pdo->prepare("INSERT INTO carte_restaurant (nom, description, prix, categorie, image_url, temps_prep_min, type_stock, stock_actuel) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$nom, $desc, $prix, $cat, $img, $temps_prep, $type_stock, $stock_actuel]);
     }
     header("Location: admin.php");
     exit;
@@ -190,7 +194,7 @@ if (isset($_POST['toggle_dispo']) && hash_equals($_SESSION['csrf_token'], $_POST
 }
 
 if (isset($_POST['sauvegarder_settings']) && hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
-    $keys = ['morning_start', 'morning_end', 'evening_start', 'evening_end', 'slot_duration', 'max_per_slot', 'is_active'];
+    $keys = ['morning_start', 'morning_end', 'evening_start', 'evening_end', 'slot_duration', 'is_active', 'reduction_temps_doublon', 'nombre_pistes_simultanees'];
     foreach ($keys as $k) {
         if (isset($_POST[$k])) {
             $stmt = $pdo->prepare("INSERT INTO commandes_settings (s_key, s_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE s_value=?");
@@ -488,6 +492,14 @@ if (!empty($all_votes)) {
                             <option value="<?= $c ?>" <?= ($plat_a_modifier['categorie'] ?? '') === $c ? "selected" : "" ?>><?= $c ?></option>
                         <?php endforeach; ?>
                     </select>
+                    <input type="number" name="temps_prep_min" placeholder="Temps prép (min)" value="<?= $plat_a_modifier['temps_prep_min'] ?? '5' ?>" required title="Temps de préparation en minutes">
+                    <select name="type_stock" onchange="toggleStockInput(this.value)">
+                        <option value="infini" <?= ($plat_a_modifier['type_stock'] ?? 'infini') === 'infini' ? 'selected' : '' ?>>Stock Infini</option>
+                        <option value="reel" <?= ($plat_a_modifier['type_stock'] ?? '') === 'reel' ? 'selected' : '' ?>>Stock Réel (Épuisable)</option>
+                    </select>
+                    <div id="stock_input_container" style="<?= ($plat_a_modifier['type_stock'] ?? 'infini') === 'reel' ? '' : 'display:none;' ?>">
+                        <input type="number" name="stock_actuel" placeholder="Quantité dispo" value="<?= $plat_a_modifier['stock_actuel'] ?? '0' ?>">
+                    </div>
                     <input type="file" name="image_upload" accept="image/*">
                 </div>
                 <textarea name="description" placeholder="Une description qui donne l'eau à la bouche..." style="margin-top: 20px; height: 100px;"><?= htmlspecialchars($plat_a_modifier['description'] ?? '') ?></textarea>
@@ -602,18 +614,14 @@ if (!empty($all_votes)) {
                     </div>
 
                     <div class="day-block">
-                        <h4 style="margin-bottom: 15px; border-bottom: 2px solid var(--sidi-blue); display: inline-block;">Capacité & Anti-Rush</h4>
+                        <h4 style="margin-bottom: 15px; border-bottom: 2px solid var(--sidi-blue); display: inline-block;">Capacité & Production</h4>
                         <div style="margin-bottom: 15px;">
-                            <label style="display:block; font-size: 0.8rem; font-weight: 800; margin-bottom: 5px;">DURÉE CRÉNEAUX</label>
-                            <select name="slot_duration">
-                                <option value="30" <?= ($settings['slot_duration'] ?? 30) == 30 ? 'selected' : '' ?>>30 minutes</option>
-                                <option value="60" <?= ($settings['slot_duration'] ?? 30) == 60 ? 'selected' : '' ?>>1 heure</option>
-                                <option value="240" <?= ($settings['slot_duration'] ?? 30) == 240 ? 'selected' : '' ?>>4 heures</option>
-                            </select>
+                            <label style="display:block; font-size: 0.8rem; font-weight: 800; margin-bottom: 5px;">RÉDUCTION DOUBLONS (min)</label>
+                            <input type="number" name="reduction_temps_doublon" value="<?= $settings['reduction_temps_doublon'] ?? 0 ?>" title="Gain de temps pour chaque plat identique supplémentaire">
                         </div>
                         <div>
-                            <label style="display:block; font-size: 0.8rem; font-weight: 800; margin-bottom: 5px;">PLATS MAXIMUM / CRÉNEAU</label>
-                            <input type="number" name="max_per_slot" value="<?= $settings['max_per_slot'] ?? 10 ?>">
+                            <label style="display:block; font-size: 0.8rem; font-weight: 800; margin-bottom: 5px;">NOMBRE DE PISTES (Cuisiniers)</label>
+                            <input type="number" name="nombre_pistes_simultanees" value="<?= $settings['nombre_pistes_simultanees'] ?? 1 ?>" title="Nombre de commandes pouvant être lancées en même temps">
                         </div>
                     </div>
 
@@ -687,6 +695,10 @@ if (!empty($all_votes)) {
                 card.style.opacity = isChecked ? '1' : '0.7';
             }
         });
+    }
+
+    function toggleStockInput(val) {
+        document.getElementById('stock_input_container').style.display = (val === 'reel' ? 'block' : 'none');
     }
 </script>
 

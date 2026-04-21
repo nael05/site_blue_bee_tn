@@ -7,6 +7,7 @@ ini_set('session.cookie_samesite', 'Lax'); // Crucial pour le retour de Stripe
 session_start();
 
 require_once 'config.php';
+require_once 'functions_ordering.php';
 
 $stripe_secret = STRIPE_SECRET_KEY;
 
@@ -44,17 +45,30 @@ if (in_array($nom_jour_fr, $settings['closed_days'])) {
     die(json_encode(['error' => "Le restaurant est fermé aujourd'hui."]));
 }
 
-// 3. Capacité du créneau
+// 3. Calculer temps et vérifier capacité
+$panier_pour_calcul = [];
+foreach ($donnees['panier'] as $item) {
+    $stmt = $pdo->prepare("SELECT temps_prep_min FROM carte_restaurant WHERE id = ?");
+    $stmt->execute([$item['id']]);
+    $t = $stmt->fetchColumn();
+    $panier_pour_calcul[] = ['id' => $item['id'], 'qty' => $item['qty'], 'temps_prep_min' => $t];
+}
+
+$temps_total = calculerTempsPanier($panier_pour_calcul, (int)($settings['reduction_temps_doublon'] ?? 0));
+$stock_check = verifierStocks($donnees['panier'], $pdo);
+
+if (!$stock_check['success']) {
+    http_response_code(403);
+    die(json_encode(['error' => $stock_check['message']]));
+}
+
 $heure_choisie = htmlspecialchars($donnees['heure'] ?? '');
-if ($heure_choisie && $heure_choisie !== 'Au plus vite') {
-    $stmtC = $pdo->prepare("SELECT COUNT(*) FROM commandes WHERE DATE(date_commande) = CURDATE() AND heure_retrait = ?");
-    $stmtC->execute([$heure_choisie]);
-    $deja_commandes = $stmtC->fetchColumn();
-    
-    if ($deja_commandes >= $settings['max_per_slot']) {
-        http_response_code(403);
-        die(json_encode(['error' => "Le créneau de $heure_choisie est désormais complet. Merci d'en choisir un autre."]));
-    }
+$type_cmd = ($heure_choisie === 'asap') ? 'asap' : 'scheduled';
+$dispo = trouverDisponibilite($temps_total, $type_cmd, $heure_choisie, $pdo);
+
+if (!$dispo) {
+    http_response_code(403);
+    die(json_encode(['error' => "Désolés, la cuisine est complète pour cet horaire."]));
 }
 // ----------------------------------------
 
@@ -87,18 +101,36 @@ foreach ($donnees['panier'] as $item) {
     }
 }
 
+// --- CRÉATION PRÉ-COMMANDE (RÉSERVATION) ---
+$details_panier_data = [
+    'items' => $panier_verifie,
+    'note' => htmlspecialchars($donnees['note'] ?? '')
+];
+$panier_json = json_encode($details_panier_data);
+
+$stmt = $pdo->prepare("INSERT INTO commandes (client_nom, client_tel, heure_retrait, details_panier, temps_total_prep, heure_debut_prep, heure_fin_estimee, piste_id, statut) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'attente_paiement')");
+$stmt->execute([
+    htmlspecialchars($donnees['client']),
+    htmlspecialchars($donnees['tel']),
+    $dispo['display_time'],
+    $panier_json,
+    $temps_total,
+    $dispo['heure_debut'],
+    $dispo['heure_fin'],
+    $dispo['piste_id']
+]);
+$order_id = $pdo->lastInsertId();
+
 $_SESSION['commande_en_attente'] = [
-    'client' => htmlspecialchars($donnees['client']),
-    'tel' => htmlspecialchars($donnees['tel']),
-    'heure' => htmlspecialchars($donnees['heure']),
-    'note' => htmlspecialchars($donnees['note'] ?? ''), // LA NOTE EST ICI
-    'panier' => $panier_verifie
+    'order_id' => $order_id,
+    'panier' => $panier_verifie // Pour la déduction de stock dans success
 ];
 
 $stripe_data = [
     'payment_method_types' => ['card'],
     'line_items' => $line_items,
     'mode' => 'payment',
+    'client_reference_id' => $order_id,
     // ⚠️ Remplace 'localhost/resto' par ton adresse InfinityFree ici !
     'success_url' => 'http://localhost/resto/success.php?session_id={CHECKOUT_SESSION_ID}',
     'cancel_url' => 'http://localhost/resto/index.php',

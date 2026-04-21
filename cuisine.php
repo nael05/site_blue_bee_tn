@@ -75,14 +75,16 @@ try {
 if (isset($_POST['action']) && $_POST['action'] == 'terminer' && isset($_POST['id'])) {
     if (!hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) { exit; }
     $id = (int)$_POST['id'];
-    $stmt = $pdo->prepare("UPDATE commandes SET statut = 'terminé' WHERE id = ?");
+    // On met le statut à terminé ET on règle l'heure de fin estimée sur MAINTENANT pour libérer la piste
+    $stmt = $pdo->prepare("UPDATE commandes SET statut = 'terminé', heure_fin_estimee = NOW() WHERE id = ?");
     $stmt->execute([$id]);
     exit;
 }
 
 if (isset($_GET['ajax'])) {
     $statut = $_GET['ajax'] === 'historique' ? 'terminé' : 'en attente';
-    $stmt = $pdo->prepare("SELECT * FROM commandes WHERE statut = ? ORDER BY id " . ($statut === 'terminé' ? 'DESC' : 'ASC'));
+    $sort = ($statut === 'terminé' ? 'id DESC' : 'heure_debut_prep ASC');
+    $stmt = $pdo->prepare("SELECT * FROM commandes WHERE statut = ? ORDER BY $sort");
     $stmt->execute([$statut]);
     $commandes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -111,7 +113,13 @@ if (isset($_GET['ajax'])) {
 
         echo '<div class="order-card" id="card-' . $cmd['id'] . '">';
         echo '<div class="order-header">';
-        echo '<div class="time"><i class="fa-solid fa-clock"></i> ' . htmlspecialchars($cmd['heure_retrait']) . '</div>';
+        $debut = $cmd['heure_debut_prep'] ? date('H:i', strtotime($cmd['heure_debut_prep'])) : '--:--';
+        $fin = $cmd['heure_fin_estimee'] ? date('H:i', strtotime($cmd['heure_fin_estimee'])) : '--:--';
+        echo '<div class="time" style="display:flex; flex-direction:column; gap:5px;">';
+        echo '<span style="font-size:0.75rem; color:#64748b; font-weight:800; background:#f1f5f9; padding:2px 8px; border-radius:6px; display:inline-block; width:fit-content; margin-bottom:5px;">CUISINIER ' . $cmd['piste_id'] . '</span>';
+        echo '<span style="font-size:0.8rem; color:var(--harissa-red); border-bottom:1px solid #fee2e2;">LANCER À : ' . $debut . '</span>';
+        echo '<span>POUR : ' . $fin . '</span>';
+        echo '</div>';
         if ($statut === 'en attente') {
             echo '<button class="btn-done" onclick="terminerCommande(' . $cmd['id'] . ')"><i class="fa-solid fa-circle-check"></i> Prête</button>';
         } else {

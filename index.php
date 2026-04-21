@@ -15,7 +15,7 @@ try {
   $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4", DB_USER, DB_PASS);
   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-  $stmt = $pdo->query("SELECT * FROM carte_restaurant WHERE est_disponible = 1");
+  $stmt = $pdo->query("SELECT * FROM carte_restaurant ORDER BY categorie, nom");
   $plats_db = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
   $menu_array = [];
@@ -27,7 +27,11 @@ try {
       'desc' => $plat['description'] ? $plat['description'] : '',
       'prix' => (float) $plat['prix'],
       'img' => $img_url,
-      'cat' => $plat['categorie']
+      'cat' => $plat['categorie'],
+      'temps_prep' => (int) $plat['temps_prep_min'],
+      'type_stock' => $plat['type_stock'],
+      'stock' => (int) $plat['stock_actuel'],
+      'dispo' => (int) $plat['est_disponible']
     ];
   }
   $json_menu = json_encode($menu_array);
@@ -124,6 +128,7 @@ try {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>BlueBeeTN - L'Âme de la Tunisie</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&family=Tajawal:wght@300;400;500;700;800&display=swap');
 
@@ -212,6 +217,21 @@ try {
           var(--medina-gold) 45px,
           var(--medina-gold) 50px);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .item-rupture {
+      filter: grayscale(100%);
+      opacity: 0.6;
+      pointer-events: none;
+    }
+    .btn-rupture {
+      background: #ccc !important;
+      border-color: #ccc !important;
+      color: #666 !important;
+      font-size: 0.7rem !important;
+      width: auto !important;
+      padding: 0 10px !important;
+      cursor: not-allowed !important;
     }
 
     nav {
@@ -658,6 +678,27 @@ try {
       transform: scale(1.08);
     }
 
+    /* Badge Rupture Majestic - Positionné au centre de l'image */
+    .rupture-badge-overlay {
+      position: absolute !important;
+      top: 50% !important;
+      left: 50% !important;
+      transform: translate(-50%, -50%) rotate(-15deg) !important;
+      background: rgba(211, 47, 47, 0.95) !important;
+      color: white !important;
+      padding: 10px 20px !important;
+      font-weight: 900 !important;
+      font-size: 1.1rem !important;
+      text-transform: uppercase !important;
+      border: 2px solid white !important;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3) !important;
+      z-index: 20 !important;
+      white-space: nowrap !important;
+      pointer-events: none !important;
+      border-radius: 5px !important;
+      display: block !important;
+    }
+
     .alcove-content {
       padding: 0 2rem;
       width: 100%;
@@ -989,6 +1030,94 @@ try {
       margin: 0 auto 2.5rem;
       background: rgba(0, 85, 153, 0.3);
       border: 3px solid var(--medina-gold);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 4.5rem;
+      position: relative;
+      box-shadow: 0 0 40px rgba(212, 175, 55, 0.15);
+      transition: transform 0.4s ease;
+    }
+
+    .cart-badge {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      background: var(--harissa-red);
+      color: white;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 800;
+      border: 2px solid white;
+    }
+
+    /* Sélecteur ASAP / Planifié */
+    .order-type-toggle {
+      display: flex;
+      background: #f1f5f9;
+      padding: 4px;
+      border-radius: 12px;
+      margin-bottom: 15px;
+      gap: 4px;
+    }
+
+    .order-type-btn {
+      flex: 1;
+      border: none;
+      background: transparent;
+      padding: 10px;
+      border-radius: 8px;
+      font-weight: 800;
+      font-size: 0.85rem;
+      color: #64748b;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .order-type-btn.active {
+      background: white;
+      color: var(--sidi-blue);
+      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    }
+    
+    .order-type-btn span.label {
+      font-size: 0.9rem;
+    }
+    
+    .order-type-btn span.sub {
+      font-size: 0.7rem;
+      opacity: 0.7;
+    }
+
+    #asapInfoBox {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      padding: 12px;
+      border-radius: 12px;
+      text-align: center;
+      margin-bottom: 15px;
+    }
+    
+    #asapInfoBox .ready-time {
+      display: block;
+      font-size: 1.2rem;
+      font-weight: 800;
+      color: var(--olive-green);
+    }
+    
+    #scheduledBox {
+      margin-bottom: 15px;
+    }
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -1445,6 +1574,7 @@ try {
       border-left: 2px solid rgba(212, 175, 55, 0.3);
       background-image: radial-gradient(circle at 2px 2px, rgba(212, 175, 55, 0.03) 1px, transparent 0);
       background-size: 24px 24px;
+      overflow: hidden; 
     }
 
     .cart-panel.open {
@@ -1453,6 +1583,19 @@ try {
     
     @media (max-width: 600px) {
         .cart-panel { width: 100%; right: -100%; border-left: none; }
+        .cart-header { padding: 1rem; flex-shrink: 0; }
+        .cart-header h3 { font-size: 1.6rem; }
+        .cart-scroll-area { padding: 0.5rem; }
+        .cart-total { font-size: 1.6rem; margin-bottom: 0.8rem; }
+        .btn-order { padding: 14px; font-size: 1.05rem; }
+    }
+    
+    .cart-scroll-area {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch; /* Défilement fluide iOS */
+      padding-bottom: 30px;
     }
 
     .cart-header {
@@ -1506,6 +1649,10 @@ try {
       background: var(--harissa-red);
       color: white;
       transform: rotate(90deg);
+    }
+
+    .cart-body {
+      padding: 1.5rem;
     }
 
     .results-container {
@@ -2331,6 +2478,61 @@ try {
         transform: translateY(0);
         opacity: 1;
       }
+    /* Système de Notifications Majestic (Toasts) */
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 3000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .toast {
+      background: white;
+      border-left: 5px solid var(--sidi-blue);
+      border-radius: 12px;
+      padding: 15px 25px;
+      min-width: 280px;
+      max-width: 400px;
+      box-shadow: 0 10px 30px rgba(0, 85, 153, 0.15);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--sidi-dark);
+      font-weight: 700;
+      pointer-events: auto;
+      transform: translateX(150%);
+      opacity: 0;
+      transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      border-bottom: 2px solid rgba(212, 175, 55, 0.1);
+    }
+
+    .toast.show {
+      transform: translateX(0);
+      opacity: 1;
+    }
+
+    .toast i {
+      font-size: 1.4rem;
+    }
+
+    .toast.error { border-left-color: var(--harissa-red); }
+    .toast.error i { color: var(--harissa-red); }
+    .toast.success { border-left-color: #22c55e; }
+    .toast.success i { color: #22c55e; }
+    .toast.info { border-left-color: var(--sidi-blue); }
+    .toast.info i { color: var(--sidi-blue); }
+    .toast.warning { border-left-color: var(--medina-gold); }
+    .toast.warning i { color: var(--medina-gold); }
+
+
+    @media (max-width: 600px) {
+      .toast-container { top: 10px; right: 10px; left: 10px; }
+      .toast { min-width: auto; width: 100%; box-sizing: border-box; }
+      .rupture-badge-overlay { font-size: 0.85rem !important; padding: 6px 12px !important; }
     }
   </style>
 </head>
@@ -2752,67 +2954,130 @@ try {
       <h3>Votre Couffin</h3>
       <button class="close-cart" onclick="toggleCart()">✕</button>
     </div>
-    <div class="cart-body" id="cartBody">
-      <div style="text-align:center; padding:6rem 1rem; color:var(--text-muted);">
-        <div style="display:flex; justify-content:center; margin-bottom:1.5rem; opacity:0.5;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" fill="currentColor" viewBox="0 0 16 16">
-            <path
-              d="M5.757 1.071a.5.5 0 0 1 .172.686L3.383 6h9.234L10.07 1.757a.5.5 0 1 1 .858-.514L13.783 6H15a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1v4.5a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 1 13.5V9a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h1.217L5.07 1.243a.5.5 0 0 1 .686-.172zM2 9v4.5A1.5 1.5 0 0 0 3.5 15h9a1.5 1.5 0 0 0 1.5-1.5V9zM1 7v1h14V7zm3 3a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3A.5.5 0 0 1 4 10m2 0a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3A.5.5 0 0 1 6 10m2 0a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3A.5.5 0 0 1 8 10m2 0a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3a.5.5 0 0 1 .5-.5m2 0a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3a.5.5 0 0 1 .5-.5" />
-          </svg>
+    <div class="cart-scroll-area">
+      <div class="cart-body" id="cartBody">
+        <div style="text-align:center; padding:6rem 1rem; color:var(--text-muted);">
+          <div style="display:flex; justify-content:center; margin-bottom:1.5rem; opacity:0.5;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" fill="currentColor" viewBox="0 0 16 16">
+              <path
+                d="M5.757 1.071a.5.5 0 0 1 .172.686L3.383 6h9.234L10.07 1.757a.5.5 0 1 1 .858-.514L13.783 6H15a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1v4.5a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 1 13.5V9a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h1.217L5.07 1.243a.5.5 0 0 1 .686-.172zM2 9v4.5A1.5 1.5 0 0 0 3.5 15h9a1.5 1.5 0 0 0 1.5-1.5V9zM1 7v1h14V7zm3 3a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3A.5.5 0 0 1 4 10m2 0a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3A.5.5 0 0 1 6 10m2 0a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3A.5.5 0 0 1 8 10m2 0a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3a.5.5 0 0 1 .5-.5m2 0a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3a.5.5 0 0 1 .5-.5" />
+            </svg>
+          </div>
+          <p style="font-size:1.4rem; font-weight:700;">Votre couffin est vide.</p>
+          <p style="margin-top:0.5rem;">Remplissez-le de délices !</p>
         </div>
-        <p style="font-size:1.4rem; font-weight:700;">Votre couffin est vide.</p>
-        <p style="margin-top:0.5rem;">Remplissez-le de délices !</p>
       </div>
-    </div>
-    <div class="cart-footer">
-      <div class="cart-total">
-        <span>Total</span>
-        <span id="cartTotal">0,00 €</span>
+      <div class="cart-footer">
+        <div class="cart-total">
+          <span>Total</span>
+          <span id="cartTotal">0,00 €</span>
+        </div>
+
+        <div id="formClientInfo"
+          style="display:none; position:relative; margin-bottom:10px; padding-top:10px; border-top: 1px dashed #e0e0e0;">
+          <button class="close-form-btn" onclick="retourPanier()" aria-label="Retour">✕</button>
+          <p style="margin-bottom: 15px; font-weight: 700; color: var(--sidi-dark); font-size: 1.1rem; padding-right: 30px;">
+            Options de retrait :</p>
+          
+          <div class="order-type-toggle">
+            <button type="button" class="order-type-btn active" id="btnTypeAsap" onclick="switchOrderType('asap')">
+              <span class="label">Maintenant</span>
+              <span class="sub">Au plus vite</span>
+            </button>
+            <button type="button" class="order-type-btn" id="btnTypeScheduled" onclick="switchOrderType('scheduled')">
+              <span class="label">Planifier</span>
+              <span class="sub">Choisir l'heure</span>
+            </button>
+          </div>
+
+          <div id="asapInfoBox">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+              <span style="font-size: 0.85rem; color: #166534;">Prêt estimé à :</span>
+              <span id="syncPulse" style="width:8px; height:8px; background:var(--olive-green); border-radius:50%; opacity:0.3; transition:0.3s;" title="Synchronisé en temps réel"></span>
+            </div>
+            <span class="ready-time" id="asapReadyTime">--:--</span>
+          </div>
+
+          <div id="scheduledBox" style="display:none;">
+            <select id="clientHeure" onchange="checkActualAvailability()"></select>
+          </div>
+
+          <div id="availabilityInfo" style="margin-top:5px; font-size:0.8rem; font-weight:800; color:var(--harissa-red); min-height:1.2rem; text-align:center;"></div>
+
+          <p style="margin-top: 15px; margin-bottom: 10px; font-weight: 700; color: var(--sidi-dark); font-size: 1.1rem;">
+            Vos coordonnées :</p>
+          <input type="text" id="clientNom" placeholder="Votre Nom" required>
+          <input type="tel" id="clientTel" placeholder="Votre Numéro" required>
+
+          <textarea id="clientNote" placeholder="Une précision ? (ex: sans oignons, bien cuit...)" rows="2"></textarea>
+        </div>
+
+        <button id="btnOrderMain" class="btn-order" onclick="passerEtapeSuivante()"
+          style="display:none;">Commandez</button>
       </div>
-
-      <div id="formClientInfo"
-        style="display:none; position:relative; margin-bottom:10px; padding-top:10px; border-top: 1px dashed #e0e0e0;">
-        <button class="close-form-btn" onclick="retourPanier()" aria-label="Retour">✕</button>
-        <p
-          style="margin-bottom: 10px; font-weight: 700; color: var(--sidi-dark); font-size: 1.1rem; padding-right: 30px;">
-          Vos coordonnées :</p>
-        <input type="text" id="clientNom" placeholder="Votre Nom" required>
-        <input type="tel" id="clientTel" placeholder="Votre Numéro" required>
-        <select id="clientHeure"></select>
-
-        <textarea id="clientNote" placeholder="Une précision ? (ex: sans oignons, bien cuit...)" rows="2"></textarea>
-      </div>
-
-      <button id="btnOrderMain" class="btn-order" onclick="passerEtapeSuivante()"
-        style="display:none;">Commandez</button>
     </div>
   </div>
 
   <script>
     const menuData = <?php echo $json_menu; ?>;
     const currentPdjId = <?php echo $current_pdj_id; ?>;
+    // --- SYSTÈME DE NOTIFICATIONS MAJESTIC (ROBUSTE) ---
+    function showToast(message, type = 'info') {
+      console.log(`[Toast] ${type}: ${message}`);
+      const container = document.getElementById('toastContainer');
+      
+      // Sécurité : si le conteneur n'existe pas, on utilise l'alerte système
+      if (!container) {
+        alert(message);
+        return;
+      }
+      
+      try {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        
+        let icon = 'fa-circle-info';
+        if (type === 'error') icon = 'fa-circle-exclamation';
+        if (type === 'success') icon = 'fa-circle-check';
+        if (type === 'warning') icon = 'fa-triangle-exclamation';
+
+        toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${message}</span>`;
+        container.appendChild(toast);
+
+        setTimeout(() => toast.classList.add('show'), 100);
+
+        setTimeout(() => {
+          toast.classList.remove('show');
+          setTimeout(() => toast.remove(), 500);
+        }, 5000);
+      } catch (e) {
+        console.error("Erreur Toast:", e);
+        alert(message);
+      }
+    }
+
     let panier = [];
     let etapeCommande = 1;
 
     function renderMenu(items) {
       const grid = document.getElementById('menuGrid');
-      grid.innerHTML = items.map(item => `
-      <div class="alcove-card fade-in visible">
-        <div class="card-image-wrapper">
-          <img src="${item.img}" alt="${item.nom}" class="card-image" onerror="this.src='https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=400&q=80'">
-        </div>
-        <div class="alcove-content">
-          <h4>${item.nom}</h4>
-          <p>${item.desc}</p>
-          <div class="price-row">
-            <span class="price">${item.prix.toFixed(2).replace('.', ',')} €</span>
-            <div id="controls-${item.id}" class="controls-container">
-              ${getControlsHTML(item.id)}
+      grid.innerHTML = items.map(item => {
+        const isRupture = (item.dispo == 0) || (item.type_stock === 'reel' && item.stock <= 0);
+        return `
+        <div class="alcove-card fade-in visible" style="${isRupture ? 'filter: grayscale(100%);' : ''}">
+          <div class="card-image-wrapper">${isRupture ? '<div class="rupture-badge-overlay">Rupture de Stock</div>' : ''}<img src="${item.img}" alt="${item.nom}" class="card-image" onerror="this.src='https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=400&q=80'"></div>
+          <div class="alcove-content">
+            <h4>${item.nom}</h4>
+            <p>${item.desc}</p>
+            <div class="price-row">
+              <span class="price">${item.prix.toFixed(2).replace('.', ',')} €</span>
+              <div id="controls-${item.id}" class="controls-container">
+                ${isRupture ? '<button class="add-btn btn-rupture" style="font-size:0.65rem!important" disabled>RUPTURE DE STOCK</button>' : getControlsHTML(item.id)}
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    `).join('');
+      `;}).join('');
     }
 
     function getControlsHTML(id) {
@@ -2930,6 +3195,7 @@ try {
       } else {
         formClient.style.display = 'block';
         btnOrder.innerText = 'Valider & Payer';
+        preparerHoraires();
       }
 
       body.innerHTML = panier.map((item, index) => `
@@ -2948,61 +3214,112 @@ try {
       `).join('');
     }
 
-    function preparerHoraires() {
+    let currentOrderType = 'asap';
+
+    function switchOrderType(type) {
+      currentOrderType = type;
+      document.getElementById('btnTypeAsap').classList.toggle('active', type === 'asap');
+      document.getElementById('btnTypeScheduled').classList.toggle('active', type === 'scheduled');
+      
+      document.getElementById('asapInfoBox').style.display = (type === 'asap' ? 'block' : 'none');
+      document.getElementById('scheduledBox').style.display = (type === 'scheduled' ? 'block' : 'none');
+      
+      checkActualAvailability();
+    }
+
+    async function preparerHoraires() {
+      if (panier.length === 0) return;
+      
       const select = document.getElementById('clientHeure');
-      select.innerHTML = '';
+      const info = document.getElementById('availabilityInfo');
+      const asapTimeSpan = document.getElementById('asapReadyTime');
+      const btn = document.getElementById('btnOrderMain');
+
+      info.innerText = "Calcul des disponibilités...";
       
-      if (!orderSettings.is_active) {
-        select.innerHTML = '<option value="">Commandes indisponibles</option>';
-        return;
-      }
-
-      const now = new Date();
-      const minTime = new Date(now.getTime() + 30 * 60000); // 30 mins mini
-      
-      const periodes = [];
-      if (orderSettings.morning_start && orderSettings.morning_end) {
-        periodes.push({ start: orderSettings.morning_start, end: orderSettings.morning_end });
-      }
-      if (orderSettings.evening_start && orderSettings.evening_end) {
-        periodes.push({ start: orderSettings.evening_start, end: orderSettings.evening_end });
-      }
-
-      const slotDur = parseInt(orderSettings.slot_duration);
-      const limit = parseInt(orderSettings.max_per_slot);
-
-      periodes.forEach(p => {
-        let [hS, mS] = p.start.split(':').map(Number);
-        let [hE, mE] = p.end.split(':').map(Number);
-
-        let iter = new Date(now);
-        iter.setHours(hS, mS, 0, 0);
+      try {
+        const response = await fetch('api_commandes.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'get_full_availability',
+            panier: panier.map(i => ({ id: i.id, qty: i.qty }))
+          })
+        });
+        const data = await response.json();
         
-        let fin = new Date(now);
-        fin.setHours(hE, mE, 0, 0);
-
-        while (iter <= fin) {
-          if (iter > minTime) {
-            const timeStr = iter.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }).replace(':', 'h');
-            const used = slotUsage[timeStr] || 0;
-            
-            const opt = document.createElement('option');
-            opt.value = timeStr;
-            
-            if (used >= limit) {
-               opt.text = `${timeStr} (Complet 🛑)`;
-               opt.disabled = true;
-            } else {
-               opt.text = timeStr;
+        if (data.success) {
+          // 1. Gérer ASAP
+          if (data.asap) {
+            asapTimeSpan.innerText = data.asap.display_time;
+            if (currentOrderType === 'asap') {
+              info.innerText = ""; 
+              btn.disabled = false;
+              btn.style.opacity = "1";
             }
-            select.appendChild(opt);
+          } else {
+            asapTimeSpan.innerText = "--:--";
+            if (currentOrderType === 'asap') {
+              info.style.color = "var(--harissa-red)";
+              info.innerText = "Cuisine complète pour le moment";
+              btn.disabled = true;
+              btn.style.opacity = "0.5";
+            }
           }
-          iter.setMinutes(iter.getMinutes() + slotDur);
+
+          // 2. Gérer les créneaux
+          const existingValue = select.value;
+          select.innerHTML = '';
+          data.slots.forEach(slot => {
+            const opt = document.createElement('option');
+            opt.value = slot.time;
+            opt.text = slot.available ? slot.display : `${slot.display} (Complet 🛑)`;
+            opt.disabled = !slot.available;
+            if (slot.time === existingValue) opt.selected = true;
+            select.appendChild(opt);
+          });
+          
+          if (currentOrderType === 'scheduled') {
+            checkActualAvailability();
+          }
+        } else {
+          info.innerText = data.message || "Erreur de disponibilité";
         }
-      });
-      
-      if (select.options.length === 0) {
-        select.innerHTML = '<option value="">Aucun créneau disponible</option>';
+      } catch (e) {
+        info.innerText = "Erreur de connexion";
+      }
+    }
+
+    function checkActualAvailability() {
+      const select = document.getElementById('clientHeure');
+      const info = document.getElementById('availabilityInfo');
+      const btn = document.getElementById('btnOrderMain');
+
+      if (currentOrderType === 'asap') {
+        const asapTime = document.getElementById('asapReadyTime').innerText;
+        if (asapTime !== "--:--") {
+          info.innerText = ""; // On vide pour ne pas faire doublon
+          btn.disabled = false;
+          btn.style.opacity = "1";
+        } else {
+          info.style.color = "var(--harissa-red)";
+          info.innerText = "Cuisine complète pour le moment";
+          btn.disabled = true;
+          btn.style.opacity = "0.5";
+        }
+      } else {
+        const selected = select.options[select.selectedIndex];
+        if (selected && !selected.disabled) {
+          info.style.color = "var(--olive-green)";
+          info.innerText = `Prêt vers ${selected.value.replace(':', 'h')}`;
+          btn.disabled = false;
+          btn.style.opacity = "1";
+        } else {
+          info.style.color = "var(--harissa-red)";
+          info.innerText = "Veuillez choisir un créneau disponible";
+          btn.disabled = true;
+          btn.style.opacity = "0.5";
+        }
       }
     }
 
@@ -3020,6 +3337,8 @@ try {
       majPanier();
     }
 
+    let availabilityInterval = null;
+    
     function toggleCart() {
       const panel = document.getElementById('cartPanel');
       panel.classList.toggle('open');
@@ -3027,8 +3346,31 @@ try {
 
       if (panel.classList.contains('open')) {
         preparerHoraires();
+        // Lancement de la synchro temps réel toutes les 20s
+        if (!availabilityInterval) {
+          availabilityInterval = setInterval(() => {
+            if (panel.classList.contains('open')) {
+              const pulse = document.getElementById('syncPulse');
+              if(pulse) pulse.style.opacity = "1";
+              preparerHoraires().then(() => {
+                 setTimeout(() => { if(pulse) pulse.style.opacity = "0.3"; }, 1000);
+              });
+            }
+          }, 20000);
+        }
+      } else {
+        if (availabilityInterval) {
+          clearInterval(availabilityInterval);
+          availabilityInterval = null;
+        }
       }
     }
+    
+    // On surcharge preparerHoraires pour qu'elle retourne une promesse (facilite le pulse)
+    const originalPrepare = preparerHoraires;
+    preparerHoraires = async function() {
+        await originalPrepare();
+    };
 
     const jsonMenu = <?= $json_menu ?>;
     const orderSettings = <?= $json_settings ?>;
@@ -3036,32 +3378,56 @@ try {
     const stripe = Stripe('<?= STRIPE_PUBLIC_KEY ?>');
 
     function commander() {
-      if (panier.length === 0) return;
+      if (!panier || panier.length === 0) return;
 
-      const nom = document.getElementById('clientNom').value.trim();
-      const tel = document.getElementById('clientTel').value.trim();
-      const heure = document.getElementById('clientHeure').value;
-      const note = document.getElementById('clientNote').value.trim();
+      const elNom = document.getElementById('clientNom');
+      const elTel = document.getElementById('clientTel');
+      const elNote = document.getElementById('clientNote');
+      
+      if (!elNom || !elTel) {
+          console.error("Champs client introuvables");
+          return;
+      }
+
+      const nom = elNom.value.trim();
+      const tel = elTel.value.trim();
+      const note = elNote ? elNote.value.trim() : "";
+      
+      let heure = 'asap';
+      if (currentOrderType === 'scheduled') {
+        const elHeure = document.getElementById('clientHeure');
+        heure = elHeure ? elHeure.value : 'asap';
+      }
 
       if (nom === "" || tel === "") {
-        alert("Veuillez renseigner votre nom et numéro de téléphone.");
+        showToast("Veuillez renseigner votre nom et numéro de téléphone.", 'warning');
         return;
       }
 
-      if (heure === "") {
-        alert("Le restaurant est actuellement fermé.");
-        return;
-      }
-
+      const info = document.getElementById('availabilityInfo');
       const btn = document.getElementById('btnOrderMain');
-      btn.innerText = "Redirection...";
-      btn.disabled = true;
+
+      if (btn && btn.disabled) {
+        showToast((info ? info.innerText : "") || "Ce créneau n'est pas disponible.", 'error');
+        return;
+      }
+
+      if (btn) {
+          btn.innerText = "Redirection...";
+          btn.disabled = true;
+      }
+      
+      if (typeof stripe === 'undefined') {
+          showToast("Erreur: Le module de paiement n'est pas chargé. Veuillez rafraîchir.", 'error');
+          if (btn) { btn.innerText = "Valider & Payer"; btn.disabled = false; }
+          return;
+      }
 
       fetch('checkout.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          panier: panier,
+          panier: panier.map(i => ({ id: i.id, qty: i.qty })),
           client: nom,
           tel: tel,
           heure: heure,
@@ -3071,7 +3437,7 @@ try {
         .then(response => response.json())
         .then(session => {
           if (session.error) {
-            alert("Détail de l'erreur : " + JSON.stringify(session.error));
+            showToast("Détail de l'erreur : " + JSON.stringify(session.error), 'error');
             btn.innerText = "Valider & Payer";
             btn.disabled = false;
           } else {
@@ -3079,7 +3445,7 @@ try {
           }
         })
         .catch(error => {
-          alert("Erreur de connexion avec le serveur : " + error.message);
+          showToast("Erreur de connexion avec le serveur : " + error.message, 'error');
           btn.innerText = "Valider & Payer";
           btn.disabled = false;
         });
@@ -3133,7 +3499,7 @@ try {
       const phone = document.getElementById('votePhone').value.trim();
 
       if (!firstName || !phone) {
-        alert('Veuillez remplir tous les champs.');
+        showToast('Veuillez remplir tous les champs.', 'warning');
         return;
       }
 
@@ -3170,11 +3536,11 @@ try {
             closeVoteModal();
             showResults();
           } else {
-            alert(result.error || 'Une erreur est survenue.');
+            showToast(result.error || 'Une erreur est survenue.', 'error');
           }
         }
       } catch (e) {
-        alert('Erreur de connexion au serveur.');
+        showToast('Erreur de connexion au serveur.', 'error');
       }
     }
 
@@ -3239,6 +3605,7 @@ try {
     });
 
   </script>
+  <div id="toastContainer" class="toast-container"></div>
 </body>
 
 </html>
