@@ -275,6 +275,7 @@ if (isset($_GET['ajax'])) {
     let filtrePDJ = false;
     let soundEnabled = false;
     let lastOrderCount = -1;
+    let audioCtx = null;
 
     function changerOnglet(onglet) {
         ongletActuel = onglet;
@@ -289,28 +290,31 @@ if (isset($_GET['ajax'])) {
         if (soundEnabled) {
             btn.classList.add('active');
             btn.innerHTML = '<i class="fa-solid fa-volume-high"></i> <span>Audio Actif</span>';
-            // Play a silent beep to unlock browser audio
-            playDing(true);
+            // Créer et débloquer l'AudioContext lors de l'interaction utilisateur
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            audioCtx.resume().then(() => playDing());
         } else {
             btn.classList.remove('active');
             btn.innerHTML = '<i class="fa-solid fa-volume-xmark"></i> <span>Désactivé</span>';
         }
     }
 
-    function playDing(silent = false) {
-        if (!soundEnabled && !silent) return;
+    function playDing() {
+        if (!soundEnabled || !audioCtx) return;
         try {
-            const context = new (window.AudioContext || window.webkitAudioContext)();
-            const osc = context.createOscillator();
-            const gain = context.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(880, context.currentTime); // Note A5 (Ding)
-            gain.gain.setValueAtTime(silent ? 0 : 0.1, context.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.5);
-            osc.connect(gain);
-            gain.connect(context.destination);
-            osc.start();
-            osc.stop(context.currentTime + 0.5);
+            // 3 bips successifs
+            [0, 0.3, 0.6].forEach(offset => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime + offset);
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime + offset);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + offset + 0.25);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(audioCtx.currentTime + offset);
+                osc.stop(audioCtx.currentTime + offset + 0.25);
+            });
         } catch(e) { console.error("Audio error", e); }
     }
 

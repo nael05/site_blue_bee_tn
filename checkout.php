@@ -22,15 +22,23 @@ try {
 
 $donnees = json_decode(file_get_contents('php://input'), true);
 
+if (!$donnees || empty($donnees['panier'])) {
+    http_response_code(400);
+    die(json_encode(['error' => "Panier vide"]));
+}
+
 // --- VÉRIFICATION CAPACITÉ & HORAIRES ---
 $settings_raw = $pdo->query("SELECT * FROM commandes_settings")->fetchAll(PDO::FETCH_ASSOC);
 $settings = [];
 foreach ($settings_raw as $s) {
     $settings[$s['s_key']] = $s['s_value'];
 }
-$settings['max_per_slot'] = (int)($settings['max_per_slot'] ?? 10);
-$settings['is_active'] = (bool)($settings['is_active'] ?? true);
-$settings['closed_days'] = json_decode($settings['closed_days'] ?? '[]', true);
+$settings['is_active']     = (bool)($settings['is_active'] ?? true);
+$settings['closed_days']   = json_decode($settings['closed_days'] ?? '[]', true);
+$settings['morning_start'] = $settings['morning_start'] ?? '11:00';
+$settings['morning_end']   = $settings['morning_end']   ?? '14:00';
+$settings['evening_start'] = $settings['evening_start'] ?? '18:00';
+$settings['evening_end']   = $settings['evening_end']   ?? '23:00';
 
 // 1. Statut global
 if (!$settings['is_active']) {
@@ -70,12 +78,16 @@ if (!$dispo) {
     http_response_code(403);
     die(json_encode(['error' => "Désolés, la cuisine est complète pour cet horaire."]));
 }
-// ----------------------------------------
 
-if (!$donnees || empty($donnees['panier'])) {
-    http_response_code(400);
-    die(json_encode(['error' => "Panier vide"]));
+// 4. L'heure de retrait doit être dans un créneau de service
+$retrait = $dispo['display_time']; // format H:i
+$dans_service = ($retrait >= $settings['morning_start'] && $retrait <= $settings['morning_end'])
+             || ($retrait >= $settings['evening_start'] && $retrait <= $settings['evening_end']);
+if (!$dans_service) {
+    http_response_code(403);
+    die(json_encode(['error' => "Commande hors des horaires de service ({$settings['morning_start']}-{$settings['morning_end']} / {$settings['evening_start']}-{$settings['evening_end']})."]));
 }
+// ----------------------------------------
 
 $line_items = [];
 $panier_verifie = [];
@@ -141,10 +153,18 @@ curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($stripe_data));
 curl_setopt($ch, CURLOPT_USERPWD, $stripe_secret . ':');
-curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+curl_setopt($ch, CURLOPT_CAINFO, 'C:/wamp64/bin/php/php8.3.28/cacert.pem');
 
 $response = curl_exec($ch);
+$curl_error = curl_error($ch);
 curl_close($ch);
+
+if ($curl_error) {
+    http_response_code(500);
+    die(json_encode(['error' => "Connexion impossible au service de paiement. Réessayez dans quelques instants."]));
+}
 
 $session = json_decode($response, true);
 if (isset($session['id'])) {

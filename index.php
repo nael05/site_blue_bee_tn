@@ -85,7 +85,6 @@ try {
   $settings['evening_start'] = $settings['evening_start'] ?? '18:00';
   $settings['evening_end'] = $settings['evening_end'] ?? '23:00';
   $settings['slot_duration'] = (int)($settings['slot_duration'] ?? '30');
-  $settings['max_per_slot'] = (int)($settings['max_per_slot'] ?? '10');
   $settings['is_active'] = (bool)($settings['is_active'] ?? '1');
   $settings['closed_days'] = json_decode($settings['closed_days'] ?? '[]', true);
 
@@ -105,16 +104,6 @@ try {
     $vote_options_data = $stmtOptions->fetchAll(PDO::FETCH_ASSOC);
   }
 
-  // Comptage des commandes du jour pour la capacité
-  $stmtUsage = $pdo->prepare("SELECT heure_retrait, COUNT(*) as cnt FROM commandes WHERE DATE(date_commande) = CURDATE() GROUP BY heure_retrait");
-  $stmtUsage->execute();
-  $usage_raw = $stmtUsage->fetchAll(PDO::FETCH_ASSOC);
-  $slot_usage = [];
-  foreach ($usage_raw as $u) {
-      $slot_usage[$u['heure_retrait']] = (int)$u['cnt'];
-  }
-  $json_usage = json_encode($slot_usage);
-  $json_settings = json_encode($settings);
 
 } catch (PDOException $e) {
   die("Le service est temporairement indisponible.");
@@ -671,6 +660,7 @@ try {
       width: 100%;
       height: 100%;
       object-fit: cover;
+      object-position: center bottom;
       transition: transform 0.4s ease;
     }
 
@@ -866,6 +856,7 @@ try {
       width: 100%;
       height: 100%;
       object-fit: cover;
+      object-position: center bottom;
     }
 
     .pdj-badge {
@@ -1729,6 +1720,7 @@ try {
       height: 55px;
       border-radius: 10px;
       object-fit: cover;
+      object-position: center bottom;
       flex-shrink: 0; /* Ne pas rétrécir la photo */
       box-shadow: 0 4px 8px rgba(0,0,0,0.08);
     }
@@ -3373,8 +3365,6 @@ try {
     };
 
     const jsonMenu = <?= $json_menu ?>;
-    const orderSettings = <?= $json_settings ?>;
-    const slotUsage = <?= $json_usage ?>;
     const stripe = Stripe('<?= STRIPE_PUBLIC_KEY ?>');
 
     function commander() {

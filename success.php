@@ -5,6 +5,7 @@ ini_set('session.use_only_cookies', 1);
 ini_set('session.cookie_samesite', 'Lax'); // Crucial pour le retour de Stripe
 
 session_start();
+date_default_timezone_set('Europe/Paris');
 require_once 'config.php';
 
 if (!isset($_GET['session_id']) || !isset($_SESSION['commande_en_attente'])) {
@@ -18,14 +19,17 @@ $session_id = $_GET['session_id'];
 $ch = curl_init("https://api.stripe.com/v1/checkout/sessions/" . $session_id);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_USERPWD, $stripe_secret . ':');
-curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+curl_setopt($ch, CURLOPT_CAINFO, 'C:/wamp64/bin/php/php8.3.28/cacert.pem');
+curl_setopt($ch, CURLOPT_TIMEOUT, 15);
 $response = curl_exec($ch);
 curl_close($ch);
 
 $session_stripe = json_decode($response, true);
 
 if (!isset($session_stripe['payment_status']) || $session_stripe['payment_status'] !== 'paid') {
-    die("Le service est temporairement indisponible.");
+    header("Location: index.php");
+    exit;
 }
 
 try {
@@ -42,8 +46,8 @@ if (!$order_id) {
     die("Erreur de réconciliation de commande.");
 }
 
-// On passe le statut de 'attente_paiement' à 'en attente'
-$stmt = $pdo->prepare("UPDATE commandes SET statut = 'en attente' WHERE id = ?");
+// On passe le statut de 'attente_paiement' à 'en attente' (la condition évite la double exécution)
+$stmt = $pdo->prepare("UPDATE commandes SET statut = 'en attente' WHERE id = ? AND statut = 'attente_paiement'");
 $stmt->execute([$order_id]);
 
 // Déduction des stocks

@@ -1,4 +1,5 @@
 <?php
+date_default_timezone_set('Europe/Paris');
 
 /**
  * Calcule le temps total de préparation du panier avec réduction pour les doublons.
@@ -74,8 +75,9 @@ function trouverDisponibilite($temps_total_prep, $type_commande, $heure_souhaite
                 $cmd_fin = new DateTime($cmd['heure_fin_estimee']);
 
                 // Si l'espace avant cette commande est suffisant
+                // invert=1 signifie que $cmd_debut < $debut_piste (commande déjà commencée) → pas de créneau libre
                 $interval = $debut_piste->diff($cmd_debut);
-                $minutes_libres = ($interval->days * 24 * 60) + ($interval->h * 60) + $interval->i;
+                $minutes_libres = $interval->invert ? 0 : (($interval->days * 24 * 60) + ($interval->h * 60) + $interval->i);
 
                 if ($minutes_libres >= $temps_total_prep) {
                     break; // On a trouvé un créneau avant cette commande

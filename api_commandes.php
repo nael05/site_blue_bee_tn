@@ -1,5 +1,6 @@
 <?php
 header('Content-Type: application/json');
+date_default_timezone_set('Europe/Paris');
 require_once 'config.php';
 require_once 'functions_ordering.php';
 
