@@ -194,11 +194,17 @@ if (isset($_POST['toggle_dispo']) && hash_equals($_SESSION['csrf_token'], $_POST
 }
 
 if (isset($_POST['sauvegarder_settings']) && hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
-    $keys = ['morning_start', 'morning_end', 'evening_start', 'evening_end', 'slot_duration', 'is_active', 'reduction_temps_doublon', 'nombre_pistes_simultanees'];
+    $keys = ['morning_start', 'morning_end', 'evening_start', 'evening_end', 'slot_duration', 'is_active', 'reduction_temps_doublon', 'nombre_pistes_simultanees', 'show_vote_results', 'restaurant_email'];
     foreach ($keys as $k) {
         if (isset($_POST[$k])) {
+            $val = trim((string)$_POST[$k]);
+            // Validation email pour restaurant_email
+            if ($k === 'restaurant_email' && $val !== '' && !filter_var($val, FILTER_VALIDATE_EMAIL)) {
+                header("Location: admin.php?error=invalid_email#tab-commandes");
+                exit;
+            }
             $stmt = $pdo->prepare("INSERT INTO commandes_settings (s_key, s_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE s_value=?");
-            $stmt->execute([$k, $_POST[$k], $_POST[$k]]);
+            $stmt->execute([$k, $val, $val]);
         }
     }
     $closed = isset($_POST['closed_days']) ? json_encode($_POST['closed_days']) : '[]';
@@ -224,6 +230,13 @@ foreach ($pdj_raw as $row) {
 
 $stmtVote = $pdo->query("SELECT id_plat FROM options_vote");
 $vote_options = $stmtVote->fetchAll(PDO::FETCH_COLUMN);
+
+$dateLundi = date('Y-m-d', strtotime('monday this week'));
+$dateJeudi = date('Y-m-d', strtotime('thursday this week'));
+$stmtVR = $pdo->prepare("SELECT v.plat_index, COUNT(*) as cnt, c.nom FROM votes_menu v JOIN carte_restaurant c ON v.plat_index = c.id WHERE v.vote_date BETWEEN ? AND ? GROUP BY v.plat_index ORDER BY cnt DESC");
+$stmtVR->execute([$dateLundi, $dateJeudi]);
+$vote_results_live = $stmtVR->fetchAll(PDO::FETCH_ASSOC);
+$total_votes_semaine = array_sum(array_column($vote_results_live, 'cnt'));
 
 $stmt = $pdo->query("SELECT * FROM carte_restaurant ORDER BY categorie, nom");
 $plats = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -417,6 +430,8 @@ if (!empty($all_votes)) {
         .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
         input:checked + .slider { background-color: #22c55e; }
         input:checked + .slider:before { transform: translateX(20px); }
+        .btn-label-desktop { display: inline; }
+        @media (max-width: 500px) { .btn-label-desktop { display: none; } }
     </style>
 </head>
 <body>
@@ -508,6 +523,9 @@ if (!empty($all_votes)) {
         </div>
 
         <h3 style="margin: 40px 0 20px;"><i class="fa-solid fa-list-check"></i> Votre Collection Culinaire</h3>
+        <div style="margin-bottom: 20px; position: relative;">
+            <input type="text" id="search-plats" placeholder="🔍 Rechercher un plat..." oninput="filtrerPlats(this.value)" style="padding: 14px 20px; border: 2px solid #e2e8f0; border-radius: 50px; font-size: 1rem; width: 100%; box-sizing: border-box; outline: none; transition: 0.3s;">
+        </div>
         <?php foreach ($plats as $plat): ?>
             <div class="product-item" id="product-<?= $plat['id'] ?>" style="<?= $plat['est_disponible'] ? '' : 'opacity: 0.7;' ?>">
                 <img src="images/<?= htmlspecialchars($plat['image_url']) ?>" class="thumb" onerror="this.src='https://images.unsplash.com/photo-1547592180-85f173990554?w=100'">
@@ -523,7 +541,7 @@ if (!empty($all_votes)) {
                         <input type="checkbox" <?= $plat['est_disponible'] ? 'checked' : '' ?> onchange="toggleDispo(<?= $plat['id'] ?>, this.checked)">
                         <span class="slider"></span>
                     </label>
-                    <a href="?modifier=<?= $plat['id'] ?>#tab-carte" class="btn-edit btn-majestic" style="padding: 10px 15px; background: var(--medina-gold); box-shadow: none;"><i class="fa-solid fa-pen-to-square"></i></a>
+                    <a href="?modifier=<?= $plat['id'] ?>#tab-carte" class="btn-edit btn-majestic" style="padding: 10px 22px; background: var(--sidi-blue); border-radius: 50px; box-shadow: 0 4px 12px rgba(0,85,153,0.25); text-decoration: none; color: white; font-weight: 800; display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-pen-to-square"></i><span class="btn-label-desktop">Modifier</span></a>
                     <form method="post" onsubmit="return confirm('Supprimer définitivement ce plat ?');" style="display:inline;">
                         <input type="hidden" name="csrf_token" value="<?= $_SESSION['csrf_token'] ?>">
                         <input type="hidden" name="plat_id" value="<?= $plat['id'] ?>">
@@ -586,6 +604,30 @@ if (!empty($all_votes)) {
                 </div>
                 <button type="submit" name="sauvegarder_menu" class="btn-majestic" style="width: 100%; margin-top: 30px;"><i class="fa-solid fa-floppy-disk"></i> Publier le Planning</button>
             </form>
+        </div>
+
+        <div class="card" style="border-top-color: var(--medina-gold); margin-top: 30px;">
+            <h3><i class="fa-solid fa-chart-bar"></i> Résultats du Vote en Direct</h3>
+            <?php if (empty($vote_results_live)): ?>
+                <p style="color: #64748b; text-align: center; padding: 20px;">Aucun vote enregistré cette semaine.</p>
+            <?php else: ?>
+                <p style="color: #64748b; margin-bottom: 20px; font-weight: 600;">Semaine du <?= date('d/m', strtotime($dateLundi)) ?> au <?= date('d/m', strtotime($dateJeudi)) ?> — <strong><?= $total_votes_semaine ?> vote(s)</strong></p>
+                <?php foreach ($vote_results_live as $i => $vr):
+                    $pct = $total_votes_semaine > 0 ? round($vr['cnt'] / $total_votes_semaine * 100) : 0;
+                    $colors = ['#d32f2f', '#005599', '#d4af37', '#4caf50'];
+                    $color = $colors[$i % count($colors)];
+                ?>
+                <div style="margin-bottom: 18px;">
+                    <div style="display: flex; justify-content: space-between; font-weight: 700; margin-bottom: 6px; color: var(--sidi-dark);">
+                        <span><?= $i === 0 ? '🏆 ' : '' ?><?= htmlspecialchars($vr['nom']) ?></span>
+                        <span style="color: <?= $color ?>;"><?= $vr['cnt'] ?> vote(s) (<?= $pct ?>%)</span>
+                    </div>
+                    <div style="background: #e2e8f0; border-radius: 10px; overflow: hidden; height: 12px;">
+                        <div style="background: <?= $color ?>; width: <?= $pct ?>%; height: 100%; border-radius: 10px; transition: width 1s ease;"></div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </div>
     </section>
 
@@ -654,6 +696,28 @@ if (!empty($all_votes)) {
                     </select>
                 </div>
                 
+                <div style="background: white; border: 2px solid #e2e8f0; padding: 25px; border-radius: 20px; display: flex; align-items: center; justify-content: space-between; margin-top: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.03);">
+                    <div>
+                        <strong style="font-size: 1.2rem; display: block;">Résultats du Vote (clients)</strong>
+                        <span style="color: #64748b; font-size: 0.9rem;">Masquez les résultats du vote pour les clients — le bouton disparaît du site.</span>
+                    </div>
+                    <select name="show_vote_results" style="width: auto; padding: 12px 30px; border-radius: 50px; font-weight: 800; border: 2px solid #e2e8f0;">
+                        <option value="1" <?= ($settings['show_vote_results'] ?? '1') == '1' ? 'selected' : '' ?>>RÉSULTATS VISIBLES</option>
+                        <option value="0" <?= ($settings['show_vote_results'] ?? '1') == '0' ? 'selected' : '' ?>>RÉSULTATS MASQUÉS</option>
+                    </select>
+                </div>
+
+                <div style="background: white; border: 2px solid #e2e8f0; padding: 25px; border-radius: 20px; margin-top: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.03);">
+                    <div style="margin-bottom: 12px;">
+                        <strong style="font-size: 1.2rem; display: block;"><i class="fa-solid fa-envelope" style="color:#005599;"></i> Email du restaurant</strong>
+                        <span style="color: #64748b; font-size: 0.9rem;">Recevra une notification à chaque commande payée + un récapitulatif quotidien à 23h59.</span>
+                    </div>
+                    <input type="email" name="restaurant_email" value="<?= htmlspecialchars($settings['restaurant_email'] ?? '') ?>" placeholder="restaurant@exemple.fr" style="width: 100%; padding: 14px 18px; border-radius: 12px; border: 2px solid #e2e8f0; font-size: 1rem; font-family: inherit;">
+                    <?php if (isset($_GET['error']) && $_GET['error'] === 'invalid_email'): ?>
+                        <p style="color: var(--harissa-red); font-weight:700; margin-top:8px;">Email invalide — veuillez vérifier.</p>
+                    <?php endif; ?>
+                </div>
+
                 <button type="submit" name="sauvegarder_settings" class="btn-majestic" style="width: 100%; margin-top: 30px; height: 70px; font-size: 1.3rem;"><i class="fa-solid fa-check-double"></i> Appliquer les Réglages Généraux</button>
             </form>
         </div>
@@ -703,6 +767,14 @@ if (!empty($all_votes)) {
 
     function toggleStockInput(val) {
         document.getElementById('stock_input_container').style.display = (val === 'reel' ? 'block' : 'none');
+    }
+
+    function filtrerPlats(query) {
+        const q = query.toLowerCase().trim();
+        document.querySelectorAll('.product-item').forEach(item => {
+            const nom = item.querySelector('strong')?.textContent.toLowerCase() || '';
+            item.style.display = (!q || nom.includes(q)) ? '' : 'none';
+        });
     }
 </script>
 

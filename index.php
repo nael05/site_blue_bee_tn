@@ -54,7 +54,7 @@ try {
     $dateJeudi = date('Y-m-d', strtotime('thursday this week'));
     
     // 1. Priorité à la décision manuelle de l'admin
-    $stmtD = $pdo->prepare("SELECT plat_id FROM decisions_vote WHERE vote_date = ?");
+    $stmtD = $pdo->prepare("SELECT plat_index FROM decisions_vote WHERE vote_date = ?");
     $stmtD->execute([$dateJeudi]);
     $winner_id = $stmtD->fetchColumn();
 
@@ -87,6 +87,7 @@ try {
   $settings['slot_duration'] = (int)($settings['slot_duration'] ?? '30');
   $settings['is_active'] = (bool)($settings['is_active'] ?? '1');
   $settings['closed_days'] = json_decode($settings['closed_days'] ?? '[]', true);
+  $show_vote_results = (bool)($settings['show_vote_results'] ?? '1');
 
   // Vérification fermeture aujourd'hui
   $nom_jour_fr = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'][date('w')];
@@ -583,6 +584,7 @@ try {
       gap: 1rem;
       margin-bottom: 5rem;
       flex-wrap: wrap;
+      align-items: center;
     }
 
     @media (max-width: 768px) {
@@ -615,9 +617,14 @@ try {
     .cat-btn.active,
     .cat-btn:hover {
       background: var(--sidi-blue);
-      color: white;
+      color: white !important;
       transform: translateY(-3px);
       box-shadow: 0 10px 20px rgba(0, 85, 153, 0.25);
+    }
+    .cat-btn-pdj.active {
+      background: var(--medina-gold) !important;
+      border-color: var(--medina-gold) !important;
+      color: white !important;
     }
 
     .menu-grid {
@@ -2039,7 +2046,7 @@ try {
       .cart-fab { bottom: 20px; right: 20px; width: 65px; height: 65px; font-size: 1.8rem; }
       .menu-grid { gap: 2rem; }
       .alcove-card { border-radius: 100px 100px 20px 20px; }
-      .card-image-wrapper { border-radius: 100px 100px 0 0; height: 200px; }
+      .card-image-wrapper { border-radius: 100px 100px 0 0; }
       }
 
       section {
@@ -2149,7 +2156,6 @@ try {
       }
 
       .card-image-wrapper {
-        height: 200px;
         border-radius: 112px 112px 0 0;
         margin-bottom: 1.2rem;
       }
@@ -2526,6 +2532,81 @@ try {
       .toast { min-width: auto; width: 100%; box-sizing: border-box; }
       .rupture-badge-overlay { font-size: 0.85rem !important; padding: 6px 12px !important; }
     }
+
+    @media (max-width: 500px) {
+      .menu-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 1rem !important;
+      }
+      .alcove-card {
+        border-radius: 80px 80px 14px 14px !important;
+      }
+      .card-image-wrapper {
+        border-radius: 76px 76px 0 0 !important;
+        margin-bottom: 0.8rem !important;
+      }
+      .alcove-content {
+        padding: 0 0.8rem !important;
+      }
+      .alcove-card h4 {
+        font-size: 1.2rem !important;
+        margin-bottom: 0.4rem !important;
+      }
+      .alcove-card p {
+        font-size: 0.8rem !important;
+        margin-bottom: 1rem !important;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .alcove-card .price {
+        font-size: 1.2rem !important;
+      }
+      .add-btn {
+        width: 36px !important;
+        height: 36px !important;
+        font-size: 1.4rem !important;
+      }
+      .card-qty-controls {
+        gap: 6px !important;
+        padding: 4px 6px !important;
+      }
+      .ctrl-btn-card {
+        width: 26px !important;
+        height: 26px !important;
+        font-size: 1.1rem !important;
+      }
+      .qty-display {
+        font-size: 0.95rem !important;
+        min-width: 16px !important;
+      }
+    }
+
+    nav { transition: top 0.4s ease, opacity 0.3s ease; }
+    .filter-bar-sticky-wrapper {
+      position: relative;
+    }
+    .menu-categories.filter-sticky {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      z-index: 1001 !important;
+      background: white !important;
+      padding: 12px 1.5rem !important;
+      margin: 0 !important;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.12) !important;
+      border-bottom: 3px solid var(--medina-gold) !important;
+      justify-content: flex-start !important;
+      flex-wrap: nowrap !important;
+      overflow-x: auto !important;
+      gap: 0.7rem !important;
+    }
+    .menu-categories.filter-sticky .cat-btn {
+      flex-shrink: 0;
+    }
+    #filter-bar-placeholder { display: none; }
   </style>
 </head>
 
@@ -2630,11 +2711,14 @@ try {
                 </div>
               <?php endforeach; ?>
             </div>
+            <?php if ($show_vote_results): ?>
             <div style="text-align: center; margin-top: 2rem;">
               <button class="btn-vote-card" onclick="showResults()" style="background: transparent; border: 2px solid var(--sidi-blue); color: var(--sidi-blue); width: auto; padding: 10px 30px;">Consulter les résultats en direct 📊</button>
             </div>
+            <?php endif; ?>
           </div>
 
+          <?php if ($show_vote_results): ?>
           <div id="vote-results-ui" class="results-container">
             <h3 style="font-family: 'Aref Ruqaa', serif; margin-bottom:1.5rem; color:var(--sidi-blue); text-align: center; font-size: 2.2rem;">Résultats en Direct 📊</h3>
             <?php foreach ($vote_options_data as $option): ?>
@@ -2653,6 +2737,7 @@ try {
               <p style="font-size: 0.9rem; color: var(--text-muted); text-align: center;">Merci pour votre participation !</p>
             </div>
           </div>
+          <?php endif; ?>
         <?php else: ?>
           <h2 class="vote-title">Système de Vote</h2>
           <p class="vote-subtitle">Aucun plat n'a encore été sélectionné pour le vote cette semaine.</p>
@@ -2765,14 +2850,15 @@ try {
         des grands-mères tunisiennes.</p>
     </div>
 
+    <div class="filter-bar-sticky-wrapper"><div id="filter-bar-placeholder"></div>
     <div class="menu-categories fade-in">
       <button class="cat-btn active" data-cat="all" onclick="filterMenu('all', event)">La Carte Complète</button>
-      <button class="cat-btn" data-cat="pdj" onclick="filterMenu('pdj', event)" style="border-color: var(--medina-gold); color: var(--sidi-blue); font-weight: 800;">✨ Plat du jour</button>
+      <button class="cat-btn cat-btn-pdj" data-cat="pdj" onclick="filterMenu('pdj', event)" style="border: 2px solid var(--medina-gold); color: var(--sidi-blue); font-weight: 800;">Plat du jour</button>
       <button class="cat-btn" data-cat="Entrées" onclick="filterMenu('Entrées', event)">Entrées</button>
       <button class="cat-btn" data-cat="Plats Tunisiens" onclick="filterMenu('Plats Tunisiens', event)">Plats Mijotés</button>
       <button class="cat-btn" data-cat="Sandwiches Tunisiens" onclick="filterMenu('Sandwiches Tunisiens', event)">Sandwiches</button>
       <button class="cat-btn" data-cat="Boissons" onclick="filterMenu('Boissons', event)">Boissons & Desserts</button>
-    </div>
+    </div></div>
 
     <div class="menu-grid" id="menuGrid">
     </div>
@@ -2831,7 +2917,7 @@ try {
                 d="M3.654 1.328a.678.678 0 0 0-1.015-.063L1.605 2.3c-.483.484-.661 1.169-.45 1.77a17.6 17.6 0 0 0 4.168 6.608 17.6 17.6 0 0 0 6.608 4.168c.601.211 1.286.033 1.77-.45l1.034-1.034a.678.678 0 0 0-.063-1.015l-2.307-1.794a.68.68 0 0 0-.58-.122l-2.19.547a1.75 1.75 0 0 1-1.657-.459L5.482 8.062a1.75 1.75 0 0 1-.46-1.657l.548-2.19a.68.68 0 0 0-.122-.58zM1.884.511a1.745 1.745 0 0 1 2.612.163L6.29 2.98c.329.423.445.974.315 1.494l-.547 2.19a.68.68 0 0 0 .178.643l2.457 2.457a.68.68 0 0 0 .644.178l2.189-.547a1.75 1.75 0 0 1 1.494.315l2.306 1.794c.829.645.905 1.87.163 2.611l-1.034 1.034c-.74.74-1.846 1.065-2.877.702a18.6 18.6 0 0 1-7.01-4.42 18.6 18.6 0 0 1-4.42-7.009c-.362-1.03-.037-2.137.703-2.877z" />
             </svg>
           </div>
-          <span>01 23 45 67 89</span>
+          <span>09 56 53 55 31</span>
         </div>
         <div class="contact-detail">
           <div class="contact-icon-wrap">
@@ -3000,6 +3086,7 @@ try {
             Vos coordonnées :</p>
           <input type="text" id="clientNom" placeholder="Votre Nom" required>
           <input type="tel" id="clientTel" placeholder="Votre Numéro" required>
+          <input type="email" id="clientEmail" placeholder="Votre Email (pour le reçu)" required>
 
           <textarea id="clientNote" placeholder="Une précision ? (ex: sans oignons, bien cuit...)" rows="2"></textarea>
         </div>
@@ -3372,25 +3459,33 @@ try {
 
       const elNom = document.getElementById('clientNom');
       const elTel = document.getElementById('clientTel');
+      const elEmail = document.getElementById('clientEmail');
       const elNote = document.getElementById('clientNote');
-      
-      if (!elNom || !elTel) {
+
+      if (!elNom || !elTel || !elEmail) {
           console.error("Champs client introuvables");
           return;
       }
 
       const nom = elNom.value.trim();
       const tel = elTel.value.trim();
+      const email = elEmail.value.trim();
       const note = elNote ? elNote.value.trim() : "";
-      
+
       let heure = 'asap';
       if (currentOrderType === 'scheduled') {
         const elHeure = document.getElementById('clientHeure');
         heure = elHeure ? elHeure.value : 'asap';
       }
 
-      if (nom === "" || tel === "") {
-        showToast("Veuillez renseigner votre nom et numéro de téléphone.", 'warning');
+      if (nom === "" || tel === "" || email === "") {
+        showToast("Veuillez renseigner votre nom, numéro et email.", 'warning');
+        return;
+      }
+      // Validation email cote client
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        showToast("Email invalide.", 'warning');
         return;
       }
 
@@ -3420,6 +3515,7 @@ try {
           panier: panier.map(i => ({ id: i.id, qty: i.qty })),
           client: nom,
           tel: tel,
+          email: email,
           heure: heure,
           note: note
         })
@@ -3431,7 +3527,7 @@ try {
             btn.innerText = "Valider & Payer";
             btn.disabled = false;
           } else {
-            return stripe.redirectToCheckout({ sessionId: session.id });
+            window.location.href = session.url;
           }
         })
         .catch(error => {
@@ -3537,6 +3633,7 @@ try {
     async function showResults() {
       document.getElementById('vote-options-ui').style.display = 'none';
       const resUI = document.getElementById('vote-results-ui');
+      if (!resUI) return;
       resUI.style.display = 'block';
 
       try {
@@ -3563,7 +3660,8 @@ try {
     }
 
     function backToVote() {
-      document.getElementById('vote-results-ui').style.display = 'none';
+      const resUI = document.getElementById('vote-results-ui');
+      if (resUI) resUI.style.display = 'none';
       document.getElementById('vote-options-ui').style.display = 'block';
     }
 
@@ -3593,6 +3691,81 @@ try {
        // Initialisation de la carte
        filterMenu('all');
     });
+
+    // Barre de filtres sticky remplace la nav dans la section carte
+    (function() {
+      const nav = document.querySelector('nav');
+      const filterBar = document.querySelector('.menu-categories');
+      const menuSection = document.getElementById('menu');
+      const placeholder = document.getElementById('filter-bar-placeholder');
+      if (!nav || !filterBar || !menuSection || !placeholder) return;
+
+      let active = false;
+
+      function onScroll() {
+        const menuBottom = menuSection.getBoundingClientRect().bottom;
+        // Utilise la position réelle de la barre (ou du placeholder quand sticky)
+        const barTop = active
+          ? placeholder.getBoundingClientRect().top
+          : filterBar.getBoundingClientRect().top;
+        const shouldStick = barTop <= 85 && menuBottom > 50;
+
+        if (shouldStick && !active) {
+          active = true;
+          placeholder.style.height = filterBar.offsetHeight + 'px';
+          placeholder.style.display = 'block';
+          // Fixer la barre en haut
+          filterBar.style.position = 'fixed';
+          filterBar.style.top = '0';
+          filterBar.style.left = '0';
+          filterBar.style.right = '0';
+          filterBar.style.zIndex = '1001';
+          filterBar.style.background = 'white';
+          filterBar.style.padding = '12px 2rem';
+          filterBar.style.boxShadow = '0 4px 20px rgba(0,0,0,0.12)';
+          filterBar.style.borderBottom = '3px solid #d4af37';
+          filterBar.style.flexWrap = 'nowrap';
+          filterBar.style.overflowX = 'auto';
+          filterBar.style.margin = '0';
+          filterBar.style.justifyContent = window.innerWidth < 600 ? 'flex-start' : 'center';
+          // Cacher la nav
+          nav.style.top = '-200px';
+          nav.style.opacity = '0';
+          nav.style.pointerEvents = 'none';
+        } else if (!shouldStick && active) {
+          active = false;
+          placeholder.style.display = 'none';
+          // Remettre la barre en place
+          filterBar.style.position = '';
+          filterBar.style.top = '';
+          filterBar.style.left = '';
+          filterBar.style.right = '';
+          filterBar.style.zIndex = '';
+          filterBar.style.background = '';
+          filterBar.style.padding = '';
+          filterBar.style.boxShadow = '';
+          filterBar.style.borderBottom = '';
+          filterBar.style.flexWrap = '';
+          filterBar.style.overflowX = '';
+          filterBar.style.margin = '';
+          filterBar.style.justifyContent = '';
+          // Remonter la nav
+          nav.style.top = '0';
+          nav.style.opacity = '1';
+          nav.style.pointerEvents = '';
+        }
+      }
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', function() {
+        if (active) {
+          active = false;
+          filterBar.style.cssText = '';
+          nav.style.cssText = '';
+          placeholder.style.display = 'none';
+        }
+      }, { passive: true });
+    })();
 
   </script>
   <div id="toastContainer" class="toast-container"></div>

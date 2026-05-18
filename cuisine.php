@@ -81,6 +81,16 @@ if (isset($_POST['action']) && $_POST['action'] == 'terminer' && isset($_POST['i
     exit;
 }
 
+// Marquage d'une commande comme "ticket imprimé" (appelé par ticket_print.php après window.print)
+if (isset($_POST['action']) && $_POST['action'] === 'marquer_imprime' && isset($_POST['id'])) {
+    if (!hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'] ?? '')) { exit; }
+    $id = (int)$_POST['id'];
+    $stmt = $pdo->prepare("UPDATE commandes SET ticket_imprime = 1 WHERE id = ?");
+    $stmt->execute([$id]);
+    echo json_encode(['success' => true]);
+    exit;
+}
+
 if (isset($_GET['ajax'])) {
     $statut = $_GET['ajax'] === 'historique' ? 'terminé' : 'en attente';
     $sort = ($statut === 'terminé' ? 'id DESC' : 'heure_debut_prep ASC');
@@ -111,7 +121,8 @@ if (isset($_GET['ajax'])) {
         $panier = (is_array($panier_data) && isset($panier_data['items'])) ? $panier_data['items'] : $panier_data;
         $note = (is_array($panier_data) && isset($panier_data['note'])) ? $panier_data['note'] : '';
 
-        echo '<div class="order-card" id="card-' . $cmd['id'] . '">';
+        $deja_imprime = (int)($cmd['ticket_imprime'] ?? 0);
+        echo '<div class="order-card" id="card-' . $cmd['id'] . '" data-id="' . $cmd['id'] . '" data-ticket-imprime="' . $deja_imprime . '">';
         echo '<div class="order-header">';
         $debut = $cmd['heure_debut_prep'] ? date('H:i', strtotime($cmd['heure_debut_prep'])) : '--:--';
         $fin = $cmd['heure_fin_estimee'] ? date('H:i', strtotime($cmd['heure_fin_estimee'])) : '--:--';
@@ -120,11 +131,14 @@ if (isset($_GET['ajax'])) {
         echo '<span style="font-size:0.8rem; color:var(--harissa-red); border-bottom:1px solid #fee2e2;">LANCER À : ' . $debut . '</span>';
         echo '<span>POUR : ' . $fin . '</span>';
         echo '</div>';
+        echo '<div style="display:flex; flex-direction:column; gap:6px; align-items:flex-end;">';
         if ($statut === 'en attente') {
             echo '<button class="btn-done" onclick="terminerCommande(' . $cmd['id'] . ')"><i class="fa-solid fa-circle-check"></i> Prête</button>';
         } else {
             echo '<span class="status-done-label"><i class="fa-solid fa-check-double"></i> Archivée</span>';
         }
+        echo '<button class="btn-reprint" onclick="reimprimerTicket(' . $cmd['id'] . ')" title="Réimprimer le ticket"><i class="fa-solid fa-print"></i> Imprimer</button>';
+        echo '</div>';
         echo '</div>';
         
         echo '<div class="client-info">';
@@ -210,6 +224,42 @@ if (isset($_GET['ajax'])) {
         .btn-done:active { transform: scale(0.95); }
         .status-done-label { color: #166534; font-weight: 800; display: flex; align-items: center; gap: 6px; }
 
+        .btn-reprint {
+            background: #f1f5f9; color: #475569; border: 2px solid #e2e8f0;
+            padding: 6px 12px; border-radius: 8px; font-weight: 700; cursor: pointer;
+            font-size: 0.75rem; display: flex; align-items: center; gap: 5px;
+            transition: 0.2s; font-family: inherit;
+        }
+        .btn-reprint:hover { background: #e2e8f0; color: var(--sidi-blue); border-color: var(--sidi-blue); }
+
+        #print-iframes-container { position: fixed; left: -10000px; top: 0; width: 1px; height: 1px; }
+        #print-iframes-container iframe { width: 80mm; height: 200mm; border: 0; }
+
+        .double-print-toggle {
+            display: inline-flex; align-items: center; gap: 8px;
+            cursor: pointer; user-select: none;
+            background: #f1f5f9; padding: 8px 14px; border-radius: 12px;
+            border: 2px solid #e2e8f0; font-weight: 800; color: #64748b;
+            transition: 0.2s;
+        }
+        .double-print-toggle:hover { border-color: var(--sidi-blue); }
+        .double-print-toggle input { display: none; }
+        .dp-slider {
+            position: relative; width: 40px; height: 22px;
+            background: #cbd5e1; border-radius: 22px; transition: 0.2s;
+        }
+        .dp-slider::after {
+            content: ''; position: absolute; top: 2px; left: 2px;
+            width: 18px; height: 18px; background: white; border-radius: 50%;
+            transition: 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .double-print-toggle input:checked + .dp-slider { background: var(--sidi-blue); }
+        .double-print-toggle input:checked + .dp-slider::after { left: 20px; }
+        .double-print-toggle:has(input:checked) {
+            background: #dbeafe; border-color: var(--sidi-blue); color: var(--sidi-dark);
+        }
+        .dp-label { font-size: 0.9rem; }
+
         .client-info { background: #f8fafc; padding: 12px 15px; border-radius: 12px; margin-bottom: 20px; border-left: 5px solid var(--medina-gold); }
         .client-info strong { font-size: 1.1rem; display: block; margin-bottom: 4px; }
         .client-info .tel { font-size: 0.95rem; color: #64748b; font-weight: 500; }
@@ -226,11 +276,29 @@ if (isset($_GET['ajax'])) {
         .refresh-loader { position: fixed; top: 90px; left: 0; height: 3px; background: var(--medina-gold); width: 0; z-index: 1001; transition: width 0.3s; }
 
         @media (max-width: 850px) {
-            .nav-container { height: auto; padding: 15px 1rem; flex-direction: column; gap: 15px; }
-            body { padding-top: 180px; }
-            .refresh-loader { top: 180px; }
-            .tabs { width: 100%; justify-content: space-around; }
-            .tab-btn { padding: 10px 12px; font-size: 0.85rem; }
+            .nav-container { height: auto; padding: 10px 1rem; flex-wrap: wrap; gap: 8px; }
+            body { padding-top: 145px; }
+            .refresh-loader { top: 145px; }
+            .nav-logo span { font-size: 1.5rem; }
+            .khamsa-icon { width: 36px; height: 36px; font-size: 1.4rem; }
+            .tabs { flex: 1 1 100%; justify-content: center; order: 3; }
+            .tab-btn { padding: 8px 16px; font-size: 0.85rem; }
+            .sound-toggle span { display: none; }
+            .sound-toggle { padding: 8px 10px; }
+            .tab-btn-pdj { padding: 8px 10px; font-size: 0.8rem; }
+        }
+        @media (max-width: 500px) {
+            .nav-container { padding: 8px 0.8rem; gap: 6px; }
+            body { padding-top: 135px; }
+            .refresh-loader { top: 135px; }
+            .tabs { gap: 5px; }
+            .tab-btn { padding: 8px 10px; font-size: 0.8rem; gap: 5px; }
+            .tab-btn i { font-size: 0.9rem; }
+            .grid { gap: 15px; }
+            .order-card { padding: 18px; border-radius: 16px; }
+            .time { font-size: 1.8rem; }
+            .item-list li { font-size: 1rem; }
+            .qty { font-size: 1.1rem; }
         }
 
         .sound-toggle {
@@ -258,6 +326,13 @@ if (isset($_GET['ajax'])) {
             <button class="sound-toggle" id="btn-sound" onclick="toggleSound()">
                 <i class="fa-solid fa-volume-xmark"></i> <span>Désactivé</span>
             </button>
+
+            <label class="double-print-toggle" title="Imprimer 2 exemplaires (cuisine + sac)">
+                <input type="checkbox" id="chk-double-print">
+                <span class="dp-slider"></span>
+                <span class="dp-label"><i class="fa-solid fa-copy"></i> Double</span>
+            </label>
+
             <button class="tab-btn-pdj" id="btn-pdj" onclick="togglePDJ()">
                 <i class="fa-solid fa-star"></i> PDJ: <?= !empty($pdj_nom) ? htmlspecialchars($pdj_nom) : 'Aucun' ?>
             </button>
@@ -269,6 +344,9 @@ if (isset($_GET['ajax'])) {
 <div class="container">
     <div class="grid" id="grille-tickets"></div>
 </div>
+
+<!-- Conteneur cache pour les iframes d'impression auto -->
+<div id="print-iframes-container" aria-hidden="true"></div>
 
 <script>
     let ongletActuel = 'encours';
@@ -327,13 +405,13 @@ if (isset($_GET['ajax'])) {
     function chargerCommandes() {
         const loader = document.getElementById('loader');
         loader.style.width = '30%';
-        
+
         fetch(`cuisine.php?ajax=${ongletActuel}&pdj=${filtrePDJ}`)
         .then(r => r.text())
         .then(html => {
             loader.style.width = '100%';
             setTimeout(() => loader.style.width = '0', 300);
-            
+
             // On compte le nombre de commandes dans le HTML reçu
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = html;
@@ -343,11 +421,72 @@ if (isset($_GET['ajax'])) {
             if (ongletActuel === 'encours' && lastOrderCount !== -1 && currentCount > lastOrderCount) {
                 playDing();
             }
-            
+
             lastOrderCount = currentCount;
             document.getElementById('grille-tickets').innerHTML = html;
+
+            // Auto-impression : pour toute commande "en attente" pas encore imprimee
+            if (ongletActuel === 'encours') {
+                declencherImpressionsAuto();
+            }
         });
     }
+
+    // Set des IDs deja envoyes a l'imprimante dans CETTE session du navigateur
+    // (evite de relancer l'impression au tour suivant si le serveur n'a pas encore
+    // enregistre le marquage)
+    const ticketsEnvoyes = new Set();
+
+    // Restaurer l'etat du toggle "double impression" depuis localStorage
+    const chkDouble = document.getElementById('chk-double-print');
+    if (chkDouble) {
+        chkDouble.checked = localStorage.getItem('bbn_double_print') === '1';
+        chkDouble.addEventListener('change', () => {
+            localStorage.setItem('bbn_double_print', chkDouble.checked ? '1' : '0');
+        });
+    }
+
+    function getCopies() {
+        return (chkDouble && chkDouble.checked) ? 2 : 1;
+    }
+
+    function declencherImpressionsAuto() {
+        const cards = document.querySelectorAll('.order-card[data-ticket-imprime="0"]');
+        cards.forEach(card => {
+            const id = card.dataset.id;
+            if (!id || ticketsEnvoyes.has(id)) return;
+            ticketsEnvoyes.add(id);
+            imprimerEnIframe(id, true);
+        });
+    }
+
+    function imprimerEnIframe(id, autoMode) {
+        const container = document.getElementById('print-iframes-container');
+        const iframe = document.createElement('iframe');
+        iframe.src = `ticket_print.php?id=${id}&auto=${autoMode ? 1 : 0}&copies=${getCopies()}`;
+        container.appendChild(iframe);
+    }
+
+    function reimprimerTicket(id) {
+        // Ouvre un onglet visible pour la reimpression manuelle
+        window.open(`ticket_print.php?id=${id}&auto=1&copies=${getCopies()}`, '_blank', 'width=400,height=700');
+    }
+
+    // Quand un iframe a fini d'imprimer, il nous le signale via postMessage : on le retire
+    window.addEventListener('message', (e) => {
+        if (e.origin !== window.location.origin) return;
+        if (e.data && e.data.type === 'ticket_printed') {
+            const container = document.getElementById('print-iframes-container');
+            container.querySelectorAll('iframe').forEach(f => {
+                if (f.src.includes('id=' + e.data.id + '&')) {
+                    setTimeout(() => f.remove(), 1000);
+                }
+            });
+            // Mettre a jour l'attribut sur la carte
+            const card = document.getElementById('card-' + e.data.id);
+            if (card) card.dataset.ticketImprime = '1';
+        }
+    });
 
     function terminerCommande(id) {
         const card = document.getElementById('card-' + id);

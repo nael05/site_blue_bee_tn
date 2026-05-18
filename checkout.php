@@ -113,6 +113,13 @@ foreach ($donnees['panier'] as $item) {
     }
 }
 
+// --- VALIDATION EMAIL CLIENT ---
+$client_email = trim((string)($donnees['email'] ?? ''));
+if (!filter_var($client_email, FILTER_VALIDATE_EMAIL)) {
+    http_response_code(400);
+    die(json_encode(['error' => "Email invalide."]));
+}
+
 // --- CRÉATION PRÉ-COMMANDE (RÉSERVATION) ---
 $details_panier_data = [
     'items' => $panier_verifie,
@@ -120,10 +127,11 @@ $details_panier_data = [
 ];
 $panier_json = json_encode($details_panier_data);
 
-$stmt = $pdo->prepare("INSERT INTO commandes (client_nom, client_tel, heure_retrait, details_panier, temps_total_prep, heure_debut_prep, heure_fin_estimee, piste_id, statut) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'attente_paiement')");
+$stmt = $pdo->prepare("INSERT INTO commandes (client_nom, client_tel, client_email, heure_retrait, details_panier, temps_total_prep, heure_debut_prep, heure_fin_estimee, piste_id, statut) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'attente_paiement')");
 $stmt->execute([
     htmlspecialchars($donnees['client']),
     htmlspecialchars($donnees['tel']),
+    $client_email,
     $dispo['display_time'],
     $panier_json,
     $temps_total,
@@ -143,6 +151,7 @@ $stripe_data = [
     'line_items' => $line_items,
     'mode' => 'payment',
     'client_reference_id' => $order_id,
+    'customer_email' => $client_email,
     // ⚠️ Remplace 'localhost/resto' par ton adresse InfinityFree ici !
     'success_url' => 'http://localhost/resto/success.php?session_id={CHECKOUT_SESSION_ID}',
     'cancel_url' => 'http://localhost/resto/index.php',
@@ -168,7 +177,7 @@ if ($curl_error) {
 
 $session = json_decode($response, true);
 if (isset($session['id'])) {
-    echo json_encode(['id' => $session['id']]);
+    echo json_encode(['id' => $session['id'], 'url' => $session['url']]);
 } else {
     http_response_code(500);
     echo json_encode(['error' => "Erreur Stripe : " . ($session['error']['message'] ?? 'Inconnue')]);

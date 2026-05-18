@@ -7,6 +7,7 @@ ini_set('session.cookie_samesite', 'Lax'); // Crucial pour le retour de Stripe
 session_start();
 date_default_timezone_set('Europe/Paris');
 require_once 'config.php';
+require_once 'mailer_brevo.php';
 
 if (!isset($_GET['session_id']) || !isset($_SESSION['commande_en_attente'])) {
     header("Location: index.php");
@@ -47,13 +48,18 @@ if (!$order_id) {
 }
 
 // On passe le statut de 'attente_paiement' à 'en attente' (la condition évite la double exécution)
+// $stmt->rowCount() nous dit si c'est BIEN cette execution qui a fait la transition,
+// ce qui evite les doubles envois d'emails si le client recharge la page.
 $stmt = $pdo->prepare("UPDATE commandes SET statut = 'en attente' WHERE id = ? AND statut = 'attente_paiement'");
 $stmt->execute([$order_id]);
+$transition_effectuee = $stmt->rowCount() > 0;
 
-// Déduction des stocks
-foreach ($c['panier'] as $item) {
-    $stmt = $pdo->prepare("UPDATE carte_restaurant SET stock_actuel = stock_actuel - ? WHERE id = ? AND type_stock = 'reel'");
-    $stmt->execute([$item['qty'], $item['id']]);
+// Déduction des stocks (seulement a la premiere transition)
+if ($transition_effectuee) {
+    foreach ($c['panier'] as $item) {
+        $stmt = $pdo->prepare("UPDATE carte_restaurant SET stock_actuel = stock_actuel - ? WHERE id = ? AND type_stock = 'reel'");
+        $stmt->execute([$item['qty'], $item['id']]);
+    }
 }
 
 // On récupère les détails complets de la commande pour l'affichage
@@ -68,6 +74,92 @@ if (!$order) {
 $details = json_decode($order['details_panier'], true);
 $items = $details['items'] ?? [];
 $note_client = $details['note'] ?? '';
+
+// ============================================================
+// ENVOI DES EMAILS - UNIQUEMENT SI LE PAIEMENT EST CONFIRME
+// (on est deja apres le check payment_status === 'paid' ligne 30)
+// ET UNIQUEMENT a la 1ere transition pour eviter les doublons
+// ============================================================
+if ($transition_effectuee) {
+    // Recap items au format HTML
+    $items_fmt = format_items_html($items);
+
+    // Email expediteur Brevo verifie : nanaililnail99@gmail.com
+    $heure_retrait = !empty($order['heure_retrait']) ? $order['heure_retrait'] : '';
+
+    // ------- 1) EMAIL AU CLIENT (recu / confirmation) -------
+    if (!empty($order['client_email']) && filter_var($order['client_email'], FILTER_VALIDATE_EMAIL)) {
+        $html_client  = '<div style="font-family:Arial,sans-serif; max-width:600px; margin:0 auto; color:#333;">';
+        $html_client .= '<div style="background:#005599; color:white; padding:20px; text-align:center; border-radius:10px 10px 0 0;">';
+        $html_client .= '<h1 style="margin:0; font-size:24px;">BlueBeeTN</h1>';
+        $html_client .= '<p style="margin:5px 0 0; opacity:0.9;">Confirmation de votre commande</p>';
+        $html_client .= '</div>';
+        $html_client .= '<div style="background:white; padding:25px; border:1px solid #e2e8f0; border-top:0;">';
+        $html_client .= '<p>Bonjour <strong>' . htmlspecialchars($order['client_nom']) . '</strong>,</p>';
+        $html_client .= '<p>Merci pour votre commande ! Votre paiement a bien ete recu.</p>';
+        $html_client .= '<div style="background:#fffbeb; border-left:5px solid #fbbf24; padding:15px; margin:15px 0; border-radius:5px;">';
+        $html_client .= '<strong>Commande N&deg; ' . (int)$order['id'] . '</strong><br>';
+        $html_client .= 'Heure de retrait : <strong style="color:#d32f2f; font-size:18px;">' . htmlspecialchars($heure_retrait) . '</strong>';
+        $html_client .= '</div>';
+        $html_client .= $items_fmt['html'];
+        $html_client .= '<div style="text-align:right; font-size:20px; font-weight:bold; padding-top:10px; border-top:2px solid #005599;">';
+        $html_client .= 'Total paye : ' . number_format($items_fmt['total'], 2, ',', ' ') . ' &euro;';
+        $html_client .= '</div>';
+        if (!empty($note_client)) {
+            $html_client .= '<div style="background:#f1f5f9; padding:12px; margin-top:15px; border-radius:5px;">';
+            $html_client .= '<strong>Votre note :</strong><br>' . nl2br(htmlspecialchars($note_client));
+            $html_client .= '</div>';
+        }
+        $html_client .= '<p style="margin-top:20px;">Presentez-vous au comptoir a l\'heure indiquee.</p>';
+        $html_client .= '<p style="font-size:13px; color:#64748b;">Une question ? Contactez le restaurant au 09 56 53 55 31.</p>';
+        $html_client .= '</div>';
+        $html_client .= '<div style="text-align:center; padding:15px; font-size:12px; color:#94a3b8;">';
+        $html_client .= 'BlueBeeTN - Cuisine tunisienne authentique';
+        $html_client .= '</div></div>';
+
+        envoyer_email_brevo(
+            $order['client_email'],
+            $order['client_nom'],
+            'Votre commande BlueBeeTN N° ' . $order['id'] . ' est confirmee',
+            $html_client
+        );
+    }
+
+    // ------- 2) EMAIL AU RESTAURANT (nouvelle commande) -------
+    $resto_email = get_restaurant_email($pdo);
+    if ($resto_email !== '') {
+        $html_resto  = '<div style="font-family:Arial,sans-serif; max-width:600px; margin:0 auto; color:#333;">';
+        $html_resto .= '<div style="background:#d32f2f; color:white; padding:20px; text-align:center; border-radius:10px 10px 0 0;">';
+        $html_resto .= '<h1 style="margin:0; font-size:24px;">NOUVELLE COMMANDE</h1>';
+        $html_resto .= '<p style="margin:5px 0 0;">Commande N&deg; ' . (int)$order['id'] . '</p>';
+        $html_resto .= '</div>';
+        $html_resto .= '<div style="background:white; padding:25px; border:1px solid #e2e8f0; border-top:0;">';
+        $html_resto .= '<table style="width:100%; margin-bottom:15px;">';
+        $html_resto .= '<tr><td style="padding:5px 0;"><strong>Heure de retrait :</strong></td><td style="text-align:right; color:#d32f2f; font-weight:bold; font-size:18px;">' . htmlspecialchars($heure_retrait) . '</td></tr>';
+        $html_resto .= '<tr><td style="padding:5px 0;"><strong>Client :</strong></td><td style="text-align:right;">' . htmlspecialchars($order['client_nom']) . '</td></tr>';
+        $html_resto .= '<tr><td style="padding:5px 0;"><strong>Telephone :</strong></td><td style="text-align:right;">' . htmlspecialchars($order['client_tel']) . '</td></tr>';
+        $html_resto .= '<tr><td style="padding:5px 0;"><strong>Email :</strong></td><td style="text-align:right;">' . htmlspecialchars($order['client_email'] ?? '') . '</td></tr>';
+        $html_resto .= '<tr><td style="padding:5px 0;"><strong>Cuisinier :</strong></td><td style="text-align:right;">N&deg; ' . (int)$order['piste_id'] . '</td></tr>';
+        $html_resto .= '</table>';
+        $html_resto .= $items_fmt['html'];
+        $html_resto .= '<div style="text-align:right; font-size:20px; font-weight:bold; padding-top:10px; border-top:2px solid #d32f2f;">';
+        $html_resto .= 'Total : ' . number_format($items_fmt['total'], 2, ',', ' ') . ' &euro;';
+        $html_resto .= '</div>';
+        if (!empty($note_client)) {
+            $html_resto .= '<div style="background:#fffbeb; border:2px dashed #d97706; padding:12px; margin-top:15px; border-radius:5px;">';
+            $html_resto .= '<strong style="color:#92400e;">NOTE CLIENT :</strong><br>' . nl2br(htmlspecialchars($note_client));
+            $html_resto .= '</div>';
+        }
+        $html_resto .= '</div></div>';
+
+        envoyer_email_brevo(
+            $resto_email,
+            'Cuisine BlueBeeTN',
+            '[NOUVELLE CMD #' . $order['id'] . '] Retrait ' . $heure_retrait . ' - ' . number_format($items_fmt['total'], 2, ',', ' ') . ' EUR',
+            $html_resto
+        );
+    }
+}
 
 unset($_SESSION['commande_en_attente']);
 ?>
@@ -331,8 +423,8 @@ unset($_SESSION['commande_en_attente']);
 
     <div class="footer-action">
         <p style="font-weight: 700; margin-bottom: 10px;">Besoin d'aide ou d'un changement ?</p>
-        <a href="tel:0601394628" class="contact-btn">
-            <i class="fa-solid fa-phone"></i> Appeler le 06 01 39 46 28
+        <a href="tel:0956535531" class="contact-btn">
+            <i class="fa-solid fa-phone"></i> Appeler le 09 56 53 55 31
         </a>
         <br>
         <a href="index.php" class="btn-home">Retour à l'accueil</a>
