@@ -21,8 +21,12 @@ $ch = curl_init("https://api.stripe.com/v1/checkout/sessions/" . $session_id);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_USERPWD, $stripe_secret . ':');
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-curl_setopt($ch, CURLOPT_CAINFO, 'C:/wamp64/bin/php/php8.3.28/cacert.pem');
 curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+// CA bundle : utilise le chemin custom seulement s'il existe (en local).
+// En prod (InfinityFree, O2switch...) on laisse cURL prendre le bundle systeme.
+if (defined('CACERT_PATH') && CACERT_PATH !== '' && is_file(CACERT_PATH)) {
+    curl_setopt($ch, CURLOPT_CAINFO, CACERT_PATH);
+}
 $response = curl_exec($ch);
 curl_close($ch);
 

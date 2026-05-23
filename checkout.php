@@ -146,15 +146,21 @@ $_SESSION['commande_en_attente'] = [
     'panier' => $panier_verifie // Pour la déduction de stock dans success
 ];
 
+// Auto-detection du domaine + protocole : marche identiquement en local
+// (localhost/resto), en prod (bluebeetn.fwh.is) et sur tout autre domaine
+// futur (genre quand on passera sur O2switch avec un vrai domaine).
+$protocole = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$base_dir  = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), '/');
+$base_url  = $protocole . '://' . $_SERVER['HTTP_HOST'] . $base_dir;
+
 $stripe_data = [
     'payment_method_types' => ['card'],
     'line_items' => $line_items,
     'mode' => 'payment',
     'client_reference_id' => $order_id,
     'customer_email' => $client_email,
-    // ⚠️ Remplace 'localhost/resto' par ton adresse InfinityFree ici !
-    'success_url' => 'http://localhost/resto/success.php?session_id={CHECKOUT_SESSION_ID}',
-    'cancel_url' => 'http://localhost/resto/index.php',
+    'success_url' => $base_url . '/success.php?session_id={CHECKOUT_SESSION_ID}',
+    'cancel_url'  => $base_url . '/index.php',
 ];
 
 $ch = curl_init('https://api.stripe.com/v1/checkout/sessions');
@@ -164,15 +170,26 @@ curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($stripe_data));
 curl_setopt($ch, CURLOPT_USERPWD, $stripe_secret . ':');
 curl_setopt($ch, CURLOPT_TIMEOUT, 15);
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-curl_setopt($ch, CURLOPT_CAINFO, 'C:/wamp64/bin/php/php8.3.28/cacert.pem');
 
-$response = curl_exec($ch);
+// CA bundle : on n'utilise le chemin custom que s'il existe vraiment
+// (en local : C:/wamp64/.../cacert.pem ; en prod : on laisse cURL
+// utiliser le bundle systeme via la valeur vide ou inexistante).
+if (defined('CACERT_PATH') && CACERT_PATH !== '' && is_file(CACERT_PATH)) {
+    curl_setopt($ch, CURLOPT_CAINFO, CACERT_PATH);
+}
+
+$response   = curl_exec($ch);
 $curl_error = curl_error($ch);
+$http_code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
 
 if ($curl_error) {
     http_response_code(500);
-    die(json_encode(['error' => "Connexion impossible au service de paiement. Réessayez dans quelques instants."]));
+    // Log l'erreur cURL pour pouvoir diagnostiquer
+    @file_put_contents(__DIR__ . '/stripe_errors.log',
+        '[' . date('Y-m-d H:i:s') . "] cURL error: $curl_error (HTTP $http_code)\n",
+        FILE_APPEND);
+    die(json_encode(['error' => "Connexion impossible au service de paiement. Réessayez dans quelques instants.", 'debug' => $curl_error]));
 }
 
 $session = json_decode($response, true);
@@ -180,6 +197,10 @@ if (isset($session['id'])) {
     echo json_encode(['id' => $session['id'], 'url' => $session['url']]);
 } else {
     http_response_code(500);
-    echo json_encode(['error' => "Erreur Stripe : " . ($session['error']['message'] ?? 'Inconnue')]);
+    $err_msg = $session['error']['message'] ?? 'Inconnue';
+    @file_put_contents(__DIR__ . '/stripe_errors.log',
+        '[' . date('Y-m-d H:i:s') . "] Stripe error (HTTP $http_code): $err_msg | response: " . substr($response, 0, 500) . "\n",
+        FILE_APPEND);
+    echo json_encode(['error' => "Erreur Stripe : " . $err_msg]);
 }
 ?>
