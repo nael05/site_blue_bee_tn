@@ -77,9 +77,10 @@ $csrf = $_SESSION['csrf_token'] ?? '';
 <meta charset="UTF-8">
 <title>Ticket cuisine #<?= $id ?></title>
 <style>
-    /* Format papier 80mm */
+    /* Format papier 80mm - On force 72mm de zone imprimable */
     @page {
-        margin: 0; /* Laisse le driver de l'imprimante gérer la longueur exacte */
+        size: 72mm auto;
+        margin: 0;
     }
 
     * { box-sizing: border-box; }
@@ -87,18 +88,20 @@ $csrf = $_SESSION['csrf_token'] ?? '';
     html, body {
         margin: 0;
         padding: 0;
-        background: #e5e7eb;
+        background: white;
+        width: 100%;
     }
 
     .ticket {
-        width: 65mm; /* Réduit pour ne pas mordre à droite */
-        margin: 0; /* Aligné à gauche pour éviter les marges invisibles */
-        padding: 2mm 3mm;
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+        padding: 0 4mm 0 0; /* Marge à droite pour forcer le recul */
         font-family: 'Courier New', Consolas, monospace;
-        font-size: 10pt; /* Légèrement plus petit pour tout faire rentrer */
-        line-height: 1.3;
+        font-size: 10pt;
+        line-height: 1.2;
         color: #000;
-        background: white;
+        overflow: hidden;
     }
 
     .center  { text-align: center; }
@@ -112,13 +115,24 @@ $csrf = $_SESSION['csrf_token'] ?? '';
     .sep-double  { border-top: 2px solid #000;  margin: 2mm 0; }
 
     .row {
-        display: flex; justify-content: space-between; align-items: baseline;
-        gap: 3mm;
+        display: flex; 
+        justify-content: space-between; 
+        align-items: baseline;
+        width: 100%;
     }
-    .row > span:last-child { white-space: nowrap; }
-
-    .item { margin: 1.5mm 0; }
-    .item-name { font-weight: bold; word-break: break-word; }
+    
+    .item { margin: 1.5mm 0; width: 100%; }
+    .item-name { 
+        font-weight: bold; 
+        word-break: break-word;
+        white-space: normal;
+        flex: 1; /* Permet au texte long de passer à la ligne */
+        padding-right: 2mm;
+    }
+    .row > span:last-child { 
+        white-space: nowrap; 
+        flex-shrink: 0; /* Empêche le prix d'être écrasé */
+    }
     .item-detail { font-size: 9pt; color: #222; padding-left: 5mm; }
 
     .total {
