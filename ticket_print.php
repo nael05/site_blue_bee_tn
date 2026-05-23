@@ -77,10 +77,9 @@ $csrf = $_SESSION['csrf_token'] ?? '';
 <meta charset="UTF-8">
 <title>Ticket cuisine #<?= $id ?></title>
 <style>
-    /* Format papier 80mm (largeur utile ~72mm sur ODP 333) */
+    /* Format papier 80mm */
     @page {
-        size: 80mm auto;
-        margin: 0;
+        margin: 0; /* Laisse le driver de l'imprimante gérer la longueur exacte */
     }
 
     * { box-sizing: border-box; }
@@ -92,12 +91,12 @@ $csrf = $_SESSION['csrf_token'] ?? '';
     }
 
     .ticket {
-        width: 72mm;
-        margin: 0 auto;
-        padding: 4mm 3mm;
+        width: 65mm; /* Réduit pour ne pas mordre à droite */
+        margin: 0; /* Aligné à gauche pour éviter les marges invisibles */
+        padding: 2mm 3mm;
         font-family: 'Courier New', Consolas, monospace;
-        font-size: 11pt;
-        line-height: 1.35;
+        font-size: 10pt; /* Légèrement plus petit pour tout faire rentrer */
+        line-height: 1.3;
         color: #000;
         background: white;
     }
