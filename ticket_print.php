@@ -56,6 +56,11 @@ if (!$cmd) {
     die('Commande introuvable');
 }
 
+// Calcul du numéro de commande de la journée
+$stmtNum = $pdo->prepare("SELECT COUNT(*) FROM commandes WHERE DATE(date_commande) = DATE(?) AND id <= ?");
+$stmtNum->execute([$cmd['date_commande'], $id]);
+$num_jour = $stmtNum->fetchColumn();
+
 $panier_raw = json_decode($cmd['details_panier'], true);
 $items = (is_array($panier_raw) && isset($panier_raw['items'])) ? $panier_raw['items'] : (is_array($panier_raw) ? $panier_raw : []);
 $note  = (is_array($panier_raw) && isset($panier_raw['note']))  ? $panier_raw['note']  : '';
@@ -208,8 +213,8 @@ for ($k = 0; $k < $copies; $k++): ?>
     <div class="sep-double"></div>
 
     <div class="center">
-        <div class="small">COMMANDE</div>
-        <div class="huge">N&deg; <?= $id ?></div>
+        <div class="small">COMMANDE INTERNET</div>
+        <div class="huge">N&deg; <?= $num_jour ?></div>
     </div>
     <div class="sep"></div>
 
