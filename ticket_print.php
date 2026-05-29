@@ -82,9 +82,7 @@ $csrf = $_SESSION['csrf_token'] ?? '';
 <meta charset="UTF-8">
 <title>Ticket cuisine #<?= $id ?></title>
 <style>
-    /* Format papier 80mm - On force 72mm de zone imprimable */
     @page {
-        size: 72mm auto;
         margin: 0;
     }
 
