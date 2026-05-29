@@ -101,7 +101,7 @@ $csrf = $_SESSION['csrf_token'] ?? '';
         width: 100%;
         max-width: 100%;
         margin: 0;
-        padding: 0 4mm 0 0; /* Marge à droite pour forcer le recul */
+        padding: 0 12mm 0 0; /* Marge étendue à droite pour forcer le recul des prix/heures */
         font-family: 'Courier New', Consolas, monospace;
         font-size: 10pt;
         line-height: 1.2;
