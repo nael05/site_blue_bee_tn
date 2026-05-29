@@ -232,7 +232,7 @@ if (isset($_GET['ajax'])) {
         }
         .btn-reprint:hover { background: #e2e8f0; color: var(--sidi-blue); border-color: var(--sidi-blue); }
 
-        #print-iframes-container { position: fixed; right: 0; bottom: 0; width: 80mm; height: 100vh; opacity: 0.01; z-index: -1; pointer-events: none; }
+        #print-iframes-container { position: fixed; right: 0; bottom: 0; width: 80mm; height: 10px; opacity: 0.01; z-index: -1; pointer-events: none; overflow: hidden; }
         #print-iframes-container iframe { width: 100%; height: 100%; border: 0; }
 
         .double-print-toggle {

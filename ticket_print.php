@@ -82,8 +82,10 @@ $csrf = $_SESSION['csrf_token'] ?? '';
 <meta charset="UTF-8">
 <title>Ticket cuisine #<?= $id ?></title>
 <style>
+    /* Format papier 80mm - Zone imprimable 72mm */
     @page {
         margin: 0;
+        size: 72mm auto;
     }
 
     * { box-sizing: border-box; }
@@ -92,16 +94,17 @@ $csrf = $_SESSION['csrf_token'] ?? '';
         margin: 0;
         padding: 0;
         background: white;
-        width: 100%;
+        width: 72mm !important;
+        max-width: 72mm !important;
     }
 
     .ticket {
-        width: 100%;
-        max-width: 100%;
+        width: 68mm !important;
+        max-width: 68mm !important;
         margin: 0;
-        padding: 0 12mm 0 0; /* Marge étendue à droite pour forcer le recul des prix/heures */
+        padding: 2mm 5mm 2mm 2mm !important; /* Marge à droite */
         font-family: 'Courier New', Consolas, monospace;
-        font-size: 10pt;
+        font-size: 9pt !important; /* Police plus petite pour tout afficher */
         line-height: 1.2;
         color: #000;
         overflow: hidden;
