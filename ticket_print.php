@@ -85,7 +85,7 @@ $csrf = $_SESSION['csrf_token'] ?? '';
     /* Format papier 80mm - Zone imprimable 72mm */
     @page {
         margin: 0;
-        size: 72mm auto;
+        size: auto;
     }
 
     * { box-sizing: border-box; }
