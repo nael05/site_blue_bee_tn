@@ -1,5 +1,4 @@
 <?php
-// Script LOCAL uniquement - génère les UPDATE SQL pour InfinityFree
 $pdo = new PDO("mysql:host=localhost;dbname=db_restaurant;charset=utf8mb4", "root", "");
 $plats = $pdo->query("SELECT id, nom, image_url FROM carte_restaurant ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
 

@@ -25,7 +25,6 @@ function txt(string $s): string {
     return $out !== false ? $out : $s;
 }
 
-// === Construction d'un ticket de demo ===
 $d  = '';
 $d .= ESC . '@';
 $d .= ESC . 't' . chr(19);
@@ -60,7 +59,6 @@ $d .= txt("Heure : " . date('d/m/Y H:i:s')) . LF;
 $d .= LF . LF . LF . LF;
 $d .= GS . 'V' . chr(1);
 
-// === Envoi ===
 $tmp = TEMP_DIR . '/test_' . uniqid('', true) . '.bin';
 file_put_contents($tmp, $d);
 

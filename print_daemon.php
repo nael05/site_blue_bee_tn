@@ -13,14 +13,12 @@
 
 require_once __DIR__ . '/config.php';
 
-// ============ CONFIGURATION ============
 const PRINTER_SHARE  = '\\\\localhost\\TICKET'; // Nom du partage Windows local
 const POLL_INTERVAL  = 2;                        // Secondes entre 2 verifications DB
 const LOG_FILE       = __DIR__ . '/print_daemon.log';
 const TEMP_DIR       = __DIR__ . '/print_tmp';
 const TICKET_WIDTH   = 42;                       // Colonnes (Font A sur ODP 333)
 
-// ============ ESC/POS ============
 const ESC = "\x1B";
 const GS  = "\x1D";
 const LF  = "\x0A";
@@ -29,14 +27,12 @@ date_default_timezone_set('Europe/Paris');
 
 if (!is_dir(TEMP_DIR)) { @mkdir(TEMP_DIR, 0777, true); }
 
-// ============ LOGGING ============
 function log_msg(string $msg): void {
     $line = '[' . date('Y-m-d H:i:s') . "] $msg\n";
     @file_put_contents(LOG_FILE, $line, FILE_APPEND);
     echo $line;
 }
 
-// ============ DB ============
 function connect_db(): PDO {
     while (true) {
         try {
@@ -53,21 +49,17 @@ function connect_db(): PDO {
     }
 }
 
-// ============ CONVERSION UTF-8 -> CP858 (Europe + euro) ============
 function txt(string $s): string {
     $out = @iconv('UTF-8', 'CP858//TRANSLIT//IGNORE', $s);
     return $out !== false ? $out : $s;
 }
 
-// ============ CONSTRUCTION DU TICKET ESC/POS ============
 function build_ticket(array $cmd): string {
     $d  = '';
 
-    // Init imprimante + page de code CP858
     $d .= ESC . '@';
     $d .= ESC . 't' . chr(19);
 
-    // -------- HEADER --------
     $d .= ESC . 'a' . chr(1);              // Centre
     $d .= GS  . '!' . chr(0x11);           // Double largeur + hauteur
     $d .= ESC . 'E' . chr(1);              // Gras
@@ -77,7 +69,6 @@ function build_ticket(array $cmd): string {
     $d .= txt("Service Cuisine") . LF;
     $d .= str_repeat('=', TICKET_WIDTH) . LF;
 
-    // -------- NUMERO DE COMMANDE --------
     $d .= ESC . 'a' . chr(1);
     $d .= GS  . '!' . chr(0x11);
     $d .= ESC . 'E' . chr(1);
@@ -86,7 +77,6 @@ function build_ticket(array $cmd): string {
     $d .= GS  . '!' . chr(0x00);
     $d .= LF;
 
-    // -------- INFOS PISTE + HORAIRES --------
     $d .= ESC . 'a' . chr(0);              // Gauche
     $debut = $cmd['heure_debut_prep'] ? date('H:i', strtotime($cmd['heure_debut_prep'])) : '--:--';
     $fin   = $cmd['heure_fin_estimee'] ? date('H:i', strtotime($cmd['heure_fin_estimee'])) : '--:--';
@@ -96,7 +86,6 @@ function build_ticket(array $cmd): string {
     $d .= txt("CUISINIER " . $cmd['piste_id']) . LF;
     $d .= ESC . 'E' . chr(0);
 
-    // Heure "Lancer a" en gros (la plus urgente pour la cuisine)
     $d .= txt("Lancer a    : ");
     $d .= GS  . '!' . chr(0x01);           // Double hauteur
     $d .= ESC . 'E' . chr(1);
@@ -108,14 +97,12 @@ function build_ticket(array $cmd): string {
     $d .= txt("Retrait     : ") . txt((string)$retrait) . LF;
     $d .= str_repeat('-', TICKET_WIDTH) . LF;
 
-    // -------- CLIENT --------
     $d .= ESC . 'E' . chr(1);
     $d .= txt("Client : " . $cmd['client_nom']) . LF;
     $d .= ESC . 'E' . chr(0);
     $d .= txt("Tel    : " . $cmd['client_tel']) . LF;
     $d .= str_repeat('-', TICKET_WIDTH) . LF;
 
-    // -------- ITEMS DU PANIER --------
     $panier_raw = json_decode($cmd['details_panier'], true);
     $items = (is_array($panier_raw) && isset($panier_raw['items'])) ? $panier_raw['items'] : $panier_raw;
     $note  = (is_array($panier_raw) && isset($panier_raw['note']))  ? $panier_raw['note']  : '';
@@ -135,7 +122,6 @@ function build_ticket(array $cmd): string {
             $sub  = $qty * $prix;
             $total += $sub;
 
-            // Ligne quantite + nom (en gras, eventuellement sur 2 lignes)
             $prefix    = $qty . "x ";
             $maxNomLen = TICKET_WIDTH - mb_strlen($prefix);
             $nomLines  = explode("\n", wordwrap($nom, $maxNomLen, "\n", true));
@@ -147,7 +133,6 @@ function build_ticket(array $cmd): string {
             }
             $d .= ESC . 'E' . chr(0);
 
-            // Ligne prix unitaire + sous-total aligne a droite
             $detail = "   (" . number_format($prix, 2, ',', ' ') . " EUR/u)";
             $right  = number_format($sub, 2, ',', ' ') . " EUR";
             $space  = TICKET_WIDTH - mb_strlen($detail) - mb_strlen($right);
@@ -158,7 +143,6 @@ function build_ticket(array $cmd): string {
 
     $d .= str_repeat('-', TICKET_WIDTH) . LF;
 
-    // -------- TOTAL --------
     $d .= ESC . 'a' . chr(2);              // Droite
     $d .= GS  . '!' . chr(0x11);           // Double H+L
     $d .= ESC . 'E' . chr(1);
@@ -167,7 +151,6 @@ function build_ticket(array $cmd): string {
     $d .= GS  . '!' . chr(0x00);
     $d .= ESC . 'a' . chr(0);
 
-    // -------- NOTE CLIENT --------
     if (!empty(trim((string)$note))) {
         $d .= LF;
         $d .= str_repeat('*', TICKET_WIDTH) . LF;
@@ -180,19 +163,16 @@ function build_ticket(array $cmd): string {
         $d .= str_repeat('*', TICKET_WIDTH) . LF;
     }
 
-    // -------- PIED --------
     $d .= LF;
     $d .= ESC . 'a' . chr(1);
     $d .= txt("Imprime le " . date('d/m/Y a H:i:s')) . LF;
     $d .= LF . LF . LF . LF;
 
-    // Coupe partielle du papier
     $d .= GS . 'V' . chr(1);
 
     return $d;
 }
 
-// ============ ENVOI A L'IMPRIMANTE (Windows shared printer) ============
 function send_to_printer(string $data): bool {
     $tmp_file = TEMP_DIR . '/ticket_' . uniqid('', true) . '.bin';
     if (file_put_contents($tmp_file, $data) === false) {
@@ -200,8 +180,6 @@ function send_to_printer(string $data): bool {
         return false;
     }
 
-    // "copy /b" envoie le fichier en mode binaire au partage Windows.
-    // Le spooler Windows met en file d'attente, donc aucun conflit avec CLIO.
     $cmd = 'copy /b "' . $tmp_file . '" "' . PRINTER_SHARE . '" 2>&1';
     $output = @shell_exec($cmd);
     @unlink($tmp_file);
@@ -211,7 +189,6 @@ function send_to_printer(string $data): bool {
         return false;
     }
 
-    // Windows FR : "1 fichier(s) copie(s)"  /  Windows EN : "1 file(s) copied"
     if (stripos($output, 'copi') !== false || stripos($output, 'copied') !== false) {
         return true;
     }
@@ -220,7 +197,6 @@ function send_to_printer(string $data): bool {
     return false;
 }
 
-// ============ BOUCLE PRINCIPALE ============
 log_msg("================================================");
 log_msg("Demarrage du daemon d'impression BlueBeeTN");
 log_msg("Imprimante  : " . PRINTER_SHARE);

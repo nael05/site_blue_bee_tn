@@ -56,7 +56,6 @@ if (!$cmd) {
     die('Commande introuvable');
 }
 
-// Calcul du numéro de commande de la journée
 $stmtNum = $pdo->prepare("SELECT COUNT(*) FROM commandes WHERE DATE(date_commande) = DATE(?) AND id <= ?");
 $stmtNum->execute([$cmd['date_commande'], $id]);
 $num_jour = $stmtNum->fetchColumn();
@@ -200,7 +199,6 @@ $csrf = $_SESSION['csrf_token'] ?? '';
 <body>
 
 <?php
-// Libelles des exemplaires (1 par defaut, 2 si double impression)
 $labels = $copies === 2 ? ['CUISINE', 'SAC CLIENT'] : [null];
 for ($k = 0; $k < $copies; $k++): ?>
 <div class="ticket">
@@ -289,14 +287,12 @@ const AUTO_MODE   = <?= $auto ? 'true' : 'false' ?>;
 const CSRF_TOKEN  = <?= json_encode($csrf) ?>;
 
 if (AUTO_MODE) {
-    // Petit delai pour s'assurer que le rendu est complet avant d'imprimer
     window.addEventListener('load', () => {
         setTimeout(() => {
             window.print();
         }, 300);
     });
 
-    // Marquer la commande comme imprimee + signaler au parent
     window.addEventListener('afterprint', () => {
         const body = new URLSearchParams();
         body.set('action', 'marquer_imprime');
@@ -309,7 +305,6 @@ if (AUTO_MODE) {
             body: body.toString()
         }).catch(() => { /* on retentera au prochain refresh */ })
           .finally(() => {
-            // Notifier le parent (cuisine.php) qui pourra retirer l'iframe
             if (window.parent && window.parent !== window) {
                 try {
                     window.parent.postMessage(

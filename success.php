@@ -1,5 +1,4 @@
 <?php
-// --- BLINDAGE SÉCURITÉ SESSIONS & HEADERS ---
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
 ini_set('session.cookie_samesite', 'Lax'); // Crucial pour le retour de Stripe
@@ -22,8 +21,6 @@ curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_USERPWD, $stripe_secret . ':');
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-// CA bundle : utilise le chemin custom seulement s'il existe (en local).
-// En prod (InfinityFree, O2switch...) on laisse cURL prendre le bundle systeme.
 if (defined('CACERT_PATH') && CACERT_PATH !== '' && is_file(CACERT_PATH)) {
     curl_setopt($ch, CURLOPT_CAINFO, CACERT_PATH);
 }
@@ -51,14 +48,10 @@ if (!$order_id) {
     die("Erreur de réconciliation de commande.");
 }
 
-// On passe le statut de 'attente_paiement' à 'en attente' (la condition évite la double exécution)
-// $stmt->rowCount() nous dit si c'est BIEN cette execution qui a fait la transition,
-// ce qui evite les doubles envois d'emails si le client recharge la page.
 $stmt = $pdo->prepare("UPDATE commandes SET statut = 'en attente' WHERE id = ? AND statut = 'attente_paiement'");
 $stmt->execute([$order_id]);
 $transition_effectuee = $stmt->rowCount() > 0;
 
-// Déduction des stocks (seulement a la premiere transition)
 if ($transition_effectuee) {
     foreach ($c['panier'] as $item) {
         $stmt = $pdo->prepare("UPDATE carte_restaurant SET stock_actuel = stock_actuel - ? WHERE id = ? AND type_stock = 'reel'");
@@ -66,7 +59,6 @@ if ($transition_effectuee) {
     }
 }
 
-// On récupère les détails complets de la commande pour l'affichage
 $stmt = $pdo->prepare("SELECT * FROM commandes WHERE id = ?");
 $stmt->execute([$order_id]);
 $order = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -79,19 +71,11 @@ $details = json_decode($order['details_panier'], true);
 $items = $details['items'] ?? [];
 $note_client = $details['note'] ?? '';
 
-// ============================================================
-// ENVOI DES EMAILS - UNIQUEMENT SI LE PAIEMENT EST CONFIRME
-// (on est deja apres le check payment_status === 'paid' ligne 30)
-// ET UNIQUEMENT a la 1ere transition pour eviter les doublons
-// ============================================================
 if ($transition_effectuee) {
-    // Recap items au format HTML
     $items_fmt = format_items_html($items);
 
-    // Email expediteur Brevo verifie : nanaililnail99@gmail.com
     $heure_retrait = !empty($order['heure_retrait']) ? $order['heure_retrait'] : '';
 
-    // ------- 1) EMAIL AU CLIENT (recu / confirmation) -------
     if (!empty($order['client_email']) && filter_var($order['client_email'], FILTER_VALIDATE_EMAIL)) {
         $html_client  = '<div style="font-family:Arial,sans-serif; max-width:600px; margin:0 auto; color:#333;">';
         $html_client .= '<div style="background:#005599; color:white; padding:20px; text-align:center; border-radius:10px 10px 0 0;">';
@@ -129,7 +113,6 @@ if ($transition_effectuee) {
         );
     }
 
-    // ------- 2) EMAIL AU RESTAURANT (nouvelle commande) -------
     $resto_email = get_restaurant_email($pdo);
     if ($resto_email !== '') {
         $html_resto  = '<div style="font-family:Arial,sans-serif; max-width:600px; margin:0 auto; color:#333;">';

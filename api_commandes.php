@@ -18,7 +18,6 @@ $action = $input['action'] ?? $_GET['action'] ?? '';
 if ($action === 'get_full_availability' || $action === 'check_availability') {
     $panier = $input['panier'] ?? [];
     
-    // 1. Récupérer les réglages
     $stmtSet = $pdo->query("SELECT s_key, s_value FROM commandes_settings");
     $settings = [];
     foreach ($stmtSet->fetchAll(PDO::FETCH_ASSOC) as $s) {
@@ -26,7 +25,6 @@ if ($action === 'get_full_availability' || $action === 'check_availability') {
     }
     $reduction = (int)($settings['reduction_temps_doublon'] ?? 0);
 
-    // 2. Récupérer les détails des articles pour le temps
     $panier_complet = [];
     foreach ($panier as $item) {
         $stmt = $pdo->prepare("SELECT id, temps_prep_min, nom FROM carte_restaurant WHERE id = ?");
@@ -38,10 +36,8 @@ if ($action === 'get_full_availability' || $action === 'check_availability') {
         }
     }
 
-    // 3. Calculer temps total
     $temps_total = calculerTempsPanier($panier_complet, $reduction);
 
-    // 4. Vérifier stocks (Optionnel pour le scan global, mais on le fait quand même)
     $stock_check = verifierStocks($panier, $pdo);
     if (!$stock_check['success']) {
         echo json_encode(['success' => false, 'message' => $stock_check['message']]);
@@ -49,7 +45,6 @@ if ($action === 'get_full_availability' || $action === 'check_availability') {
     }
 
     if ($action === 'check_availability') {
-        // Ancienne logique conservée pour compatibilité checkout
         $type_commande = $input['type_commande'] ?? 'asap';
         $heure_souhaitee = $input['heure'] ?? '';
         $dispo = trouverDisponibilite($temps_total, $type_commande, $heure_souhaitee, $pdo);
@@ -61,11 +56,8 @@ if ($action === 'get_full_availability' || $action === 'check_availability') {
         exit;
     }
 
-    // NOUVELLE ACTION: get_full_availability
-    // Calcul ASAP
     $asap = trouverDisponibilite($temps_total, 'asap', '', $pdo);
     
-    // Calcul de tous les créneaux
     $slots_availability = [];
     $now = new DateTime();
     $periodes = [];

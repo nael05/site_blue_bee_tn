@@ -1,5 +1,4 @@
 <?php
-// --- BLINDAGE SÉCURITÉ SESSIONS & HEADERS ---
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
 ini_set('session.cookie_samesite', 'Lax');
@@ -36,30 +35,25 @@ try {
   }
   $json_menu = json_encode($menu_array);
 
-  // Nouvelle logique Plat du Jour & Vote
   $num_jour = (int) date('N'); // 1=Mon, 4=Thu, 5=Fri, 6=Sat, 7=Sun
   $is_vote_mode = ($num_jour >= 1 && $num_jour <= 4);
   $plat_du_jour = null;
 
   if ($num_jour >= 1 && $num_jour <= 4) {
-    // Lundi à Jeudi : Plat défini manuellement
     $noms_jours_fr = [1 => 'Lundi', 2 => 'Mardi', 3 => 'Mercredi', 4 => 'Jeudi'];
     $jour_nom = $noms_jours_fr[$num_jour];
     $stmtPDJ = $pdo->prepare("SELECT c.* FROM plat_du_jour p JOIN carte_restaurant c ON p.id_plat = c.id WHERE p.jour = ?");
     $stmtPDJ->execute([$jour_nom]);
     $plat_du_jour = $stmtPDJ->fetch(PDO::FETCH_ASSOC);
   } else {
-    // Vendredi à Dimanche : Gagnant du vote (clôturé Jeudi 23:59)
     $dateLundi = date('Y-m-d', strtotime('monday this week'));
     $dateJeudi = date('Y-m-d', strtotime('thursday this week'));
     
-    // 1. Priorité à la décision manuelle de l'admin
     $stmtD = $pdo->prepare("SELECT plat_index FROM decisions_vote WHERE vote_date = ?");
     $stmtD->execute([$dateJeudi]);
     $winner_id = $stmtD->fetchColumn();
 
     if (!$winner_id) {
-        // 2. Calcul automatique du gagnant du vote
         $stmtV = $pdo->prepare("SELECT plat_index, COUNT(*) as cnt FROM votes_menu WHERE vote_date BETWEEN ? AND ? AND plat_index IS NOT NULL GROUP BY plat_index ORDER BY cnt DESC LIMIT 1");
         $stmtV->execute([$dateLundi, $dateJeudi]);
         $winner_res = $stmtV->fetch(PDO::FETCH_ASSOC);
@@ -73,13 +67,11 @@ try {
     }
   }
 
-  // Récupération des réglages de commande
   $settings_raw = $pdo->query("SELECT * FROM commandes_settings")->fetchAll(PDO::FETCH_ASSOC);
   $settings = [];
   foreach ($settings_raw as $s) {
       $settings[$s['s_key']] = $s['s_value'];
   }
-  // Valeurs par défaut
   $settings['morning_start'] = $settings['morning_start'] ?? '11:00';
   $settings['morning_end'] = $settings['morning_end'] ?? '14:00';
   $settings['evening_start'] = $settings['evening_start'] ?? '18:00';
@@ -89,16 +81,13 @@ try {
   $settings['closed_days'] = json_decode($settings['closed_days'] ?? '[]', true);
   $show_vote_results = (bool)($settings['show_vote_results'] ?? '1');
 
-  // Vérification fermeture aujourd'hui
   $nom_jour_fr = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'][date('w')];
   if (in_array($nom_jour_fr, $settings['closed_days'])) {
       $settings['is_active'] = false;
   }
 
-  // ID du plat du jour actuel pour le filtre JS
   $current_pdj_id = ($plat_du_jour) ? (int)$plat_du_jour['id'] : 0;
 
-  // Récupération des options de vote actives
   $vote_options_data = [];
   if ($is_vote_mode) {
     $stmtOptions = $pdo->query("SELECT c.* FROM options_vote o JOIN carte_restaurant c ON o.id_plat = c.id");
@@ -3100,12 +3089,10 @@ try {
   <script>
     const menuData = <?php echo $json_menu; ?>;
     const currentPdjId = <?php echo $current_pdj_id; ?>;
-    // --- SYSTÈME DE NOTIFICATIONS MAJESTIC (ROBUSTE) ---
     function showToast(message, type = 'info') {
       console.log(`[Toast] ${type}: ${message}`);
       const container = document.getElementById('toastContainer');
       
-      // Sécurité : si le conteneur n'existe pas, on utilise l'alerte système
       if (!container) {
         alert(message);
         return;
@@ -3186,14 +3173,12 @@ try {
     }
 
     function filterMenu(cat, event = null) {
-      // Gestion de la classe active
       document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
       
       const targetBtn = document.querySelector(`.cat-btn[data-cat="${cat}"]`);
       if (targetBtn) {
         targetBtn.classList.add('active');
       } else if (event) {
-        // Fallback si pas de data-cat mais event présent
         event.target.classList.add('active');
       }
 
@@ -3201,10 +3186,8 @@ try {
       if (cat === 'all') {
         items = menuData;
       } else if (cat === 'pdj') {
-        // Recherche du plat du jour dans les données chargées
         items = menuData.filter(i => i.id == currentPdjId);
         
-        // Si non trouvé dans menuData (ex: en rupture), on reste sur le message d'indisponibilité
         if (items.length === 0) {
           document.getElementById('menuGrid').innerHTML = `
             <div style="grid-column: 1 / -1; text-align:center; padding:5rem 2rem; background:white; border-radius:20px; box-shadow:0 10px 30px rgba(0,0,0,0.05); border: 1px dashed var(--medina-gold);">
@@ -3328,7 +3311,6 @@ try {
         const data = await response.json();
         
         if (data.success) {
-          // 1. Gérer ASAP
           if (data.asap) {
             asapTimeSpan.innerText = data.asap.display_time;
             if (currentOrderType === 'asap') {
@@ -3346,7 +3328,6 @@ try {
             }
           }
 
-          // 2. Gérer les créneaux
           const existingValue = select.value;
           select.innerHTML = '';
           data.slots.forEach(slot => {
@@ -3425,7 +3406,6 @@ try {
 
       if (panel.classList.contains('open')) {
         preparerHoraires();
-        // Lancement de la synchro temps réel toutes les 20s
         if (!availabilityInterval) {
           availabilityInterval = setInterval(() => {
             if (panel.classList.contains('open')) {
@@ -3445,7 +3425,6 @@ try {
       }
     }
     
-    // On surcharge preparerHoraires pour qu'elle retourne une promesse (facilite le pulse)
     const originalPrepare = preparerHoraires;
     preparerHoraires = async function() {
         await originalPrepare();
@@ -3482,7 +3461,6 @@ try {
         showToast("Veuillez renseigner votre nom, numéro et email.", 'warning');
         return;
       }
-      // Validation email cote client
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
         showToast("Email invalide.", 'warning');
@@ -3548,7 +3526,6 @@ try {
     window.addEventListener('scroll', verifScroll);
     verifScroll();
 
-    // Sécurisation du Menu Mobile
     const burgerBtn = document.getElementById('burgerBtn');
     const navLinks = document.getElementById('navLinks');
 
@@ -3566,7 +3543,6 @@ try {
       });
     }
 
-    // Logique Vote Interactif
     let currentVotedIndex = null;
 
     function openVoteModal(index, dishName) {
@@ -3610,7 +3586,6 @@ try {
           showResults();
         } else {
           if (result.error && result.error.includes('déjà voté')) {
-            // Synchronisation si le serveur dit qu'on a déjà voté
             const d = new Date();
             const day = d.getDay() || 7;
             d.setDate(d.getDate() + 4 - day);
@@ -3646,7 +3621,6 @@ try {
             const span = document.getElementById(`percentage-${idx}`);
             if (bar && span) {
               const val = data.percentages[idx];
-              // On laisse un petit délai pour l'animation
               setTimeout(() => {
                 bar.style.width = val + '%';
               }, 100);
@@ -3665,15 +3639,12 @@ try {
       document.getElementById('vote-options-ui').style.display = 'block';
     }
 
-    // Au chargement du site
     window.addEventListener('load', () => {
-       // Retour en haut au refresh
        if ('scrollRestoration' in history) {
          history.scrollRestoration = 'manual';
        }
        window.scrollTo(0, 0);
 
-       // Déjà voté cette semaine ?
        const d = new Date();
        const day = d.getDay() || 7;
        d.setDate(d.getDate() + 4 - day);
@@ -3688,11 +3659,9 @@ try {
           showResults();
        }
        
-       // Initialisation de la carte
        filterMenu('all');
     });
 
-    // Barre de filtres sticky remplace la nav dans la section carte
     (function() {
       const nav = document.querySelector('nav');
       const filterBar = document.querySelector('.menu-categories');
@@ -3704,7 +3673,6 @@ try {
 
       function onScroll() {
         const menuBottom = menuSection.getBoundingClientRect().bottom;
-        // Utilise la position réelle de la barre (ou du placeholder quand sticky)
         const barTop = active
           ? placeholder.getBoundingClientRect().top
           : filterBar.getBoundingClientRect().top;
@@ -3714,7 +3682,6 @@ try {
           active = true;
           placeholder.style.height = filterBar.offsetHeight + 'px';
           placeholder.style.display = 'block';
-          // Fixer la barre en haut
           filterBar.style.position = 'fixed';
           filterBar.style.top = '0';
           filterBar.style.left = '0';
@@ -3728,14 +3695,12 @@ try {
           filterBar.style.overflowX = 'auto';
           filterBar.style.margin = '0';
           filterBar.style.justifyContent = window.innerWidth < 600 ? 'flex-start' : 'center';
-          // Cacher la nav
           nav.style.top = '-200px';
           nav.style.opacity = '0';
           nav.style.pointerEvents = 'none';
         } else if (!shouldStick && active) {
           active = false;
           placeholder.style.display = 'none';
-          // Remettre la barre en place
           filterBar.style.position = '';
           filterBar.style.top = '';
           filterBar.style.left = '';
@@ -3749,7 +3714,6 @@ try {
           filterBar.style.overflowX = '';
           filterBar.style.margin = '';
           filterBar.style.justifyContent = '';
-          // Remonter la nav
           nav.style.top = '0';
           nav.style.opacity = '1';
           nav.style.pointerEvents = '';

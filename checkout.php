@@ -1,5 +1,4 @@
 <?php
-// --- BLINDAGE SÉCURITÉ SESSIONS & HEADERS ---
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
 ini_set('session.cookie_samesite', 'Lax'); // Crucial pour le retour de Stripe
@@ -27,7 +26,6 @@ if (!$donnees || empty($donnees['panier'])) {
     die(json_encode(['error' => "Panier vide"]));
 }
 
-// --- VÉRIFICATION CAPACITÉ & HORAIRES ---
 $settings_raw = $pdo->query("SELECT * FROM commandes_settings")->fetchAll(PDO::FETCH_ASSOC);
 $settings = [];
 foreach ($settings_raw as $s) {
@@ -40,20 +38,17 @@ $settings['morning_end']   = $settings['morning_end']   ?? '14:00';
 $settings['evening_start'] = $settings['evening_start'] ?? '18:00';
 $settings['evening_end']   = $settings['evening_end']   ?? '23:00';
 
-// 1. Statut global
 if (!$settings['is_active']) {
     http_response_code(403);
     die(json_encode(['error' => "Désolé, les commandes sont actuellement désactivées."]));
 }
 
-// 2. Jour de fermeture
 $nom_jour_fr = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'][date('w')];
 if (in_array($nom_jour_fr, $settings['closed_days'])) {
     http_response_code(403);
     die(json_encode(['error' => "Le restaurant est fermé aujourd'hui."]));
 }
 
-// 3. Calculer temps et vérifier capacité
 $panier_pour_calcul = [];
 foreach ($donnees['panier'] as $item) {
     $stmt = $pdo->prepare("SELECT temps_prep_min FROM carte_restaurant WHERE id = ?");
@@ -79,7 +74,6 @@ if (!$dispo) {
     die(json_encode(['error' => "Désolés, la cuisine est complète pour cet horaire."]));
 }
 
-// 4. L'heure de retrait doit être dans un créneau de service
 $retrait = $dispo['display_time']; // format H:i
 $dans_service = ($retrait >= $settings['morning_start'] && $retrait <= $settings['morning_end'])
              || ($retrait >= $settings['evening_start'] && $retrait <= $settings['evening_end']);
@@ -87,7 +81,6 @@ if (!$dans_service) {
     http_response_code(403);
     die(json_encode(['error' => "Commande hors des horaires de service ({$settings['morning_start']}-{$settings['morning_end']} / {$settings['evening_start']}-{$settings['evening_end']})."]));
 }
-// ----------------------------------------
 
 $line_items = [];
 $panier_verifie = [];
@@ -113,14 +106,12 @@ foreach ($donnees['panier'] as $item) {
     }
 }
 
-// --- VALIDATION EMAIL CLIENT ---
 $client_email = trim((string)($donnees['email'] ?? ''));
 if (!filter_var($client_email, FILTER_VALIDATE_EMAIL)) {
     http_response_code(400);
     die(json_encode(['error' => "Email invalide."]));
 }
 
-// --- CRÉATION PRÉ-COMMANDE (RÉSERVATION) ---
 $details_panier_data = [
     'items' => $panier_verifie,
     'note' => htmlspecialchars($donnees['note'] ?? '')
@@ -146,9 +137,6 @@ $_SESSION['commande_en_attente'] = [
     'panier' => $panier_verifie // Pour la déduction de stock dans success
 ];
 
-// Auto-detection du domaine + protocole : marche identiquement en local
-// (localhost/resto), en prod (bluebeetn.fwh.is) et sur tout autre domaine
-// futur (genre quand on passera sur O2switch avec un vrai domaine).
 $protocole = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 $base_dir  = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), '/');
 $base_url  = $protocole . '://' . $_SERVER['HTTP_HOST'] . $base_dir;
@@ -171,9 +159,6 @@ curl_setopt($ch, CURLOPT_USERPWD, $stripe_secret . ':');
 curl_setopt($ch, CURLOPT_TIMEOUT, 15);
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 
-// CA bundle : on n'utilise le chemin custom que s'il existe vraiment
-// (en local : C:/wamp64/.../cacert.pem ; en prod : on laisse cURL
-// utiliser le bundle systeme via la valeur vide ou inexistante).
 if (defined('CACERT_PATH') && CACERT_PATH !== '' && is_file(CACERT_PATH)) {
     curl_setopt($ch, CURLOPT_CAINFO, CACERT_PATH);
 }
@@ -185,7 +170,6 @@ curl_close($ch);
 
 if ($curl_error) {
     http_response_code(500);
-    // Log l'erreur cURL pour pouvoir diagnostiquer
     @file_put_contents(__DIR__ . '/stripe_errors.log',
         '[' . date('Y-m-d H:i:s') . "] cURL error: $curl_error (HTTP $http_code)\n",
         FILE_APPEND);

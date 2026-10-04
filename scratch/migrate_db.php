@@ -7,7 +7,6 @@ try {
 
     echo "Vérification et mise à jour de la base de données...\n";
 
-    // 1. Table carte_restaurant
     $cols = $pdo->query("DESCRIBE carte_restaurant")->fetchAll(PDO::FETCH_COLUMN);
     if (!in_array('temps_prep_min', $cols)) {
         $pdo->exec("ALTER TABLE carte_restaurant ADD COLUMN temps_prep_min INT DEFAULT 5");
@@ -22,7 +21,6 @@ try {
         echo "Colonne stock_actuel ajoutée.\n";
     }
 
-    // 2. Table commandes
     $cols = $pdo->query("DESCRIBE commandes")->fetchAll(PDO::FETCH_COLUMN);
     if (!in_array('temps_total_prep', $cols)) {
         $pdo->exec("ALTER TABLE commandes ADD COLUMN temps_total_prep INT");
@@ -37,7 +35,6 @@ try {
         echo "Colonne heure_fin_estimee ajoutée.\n";
     }
 
-    // 3. Table commandes_settings (Default values)
     $stmt = $pdo->prepare("INSERT IGNORE INTO commandes_settings (s_key, s_value) VALUES (?, ?)");
     $stmt->execute(['reduction_temps_doublon', '0']);
     $stmt->execute(['nombre_pistes_simultanees', '1']);

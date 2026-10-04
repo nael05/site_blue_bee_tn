@@ -10,7 +10,6 @@ try {
     
     echo "Heure actuelle (PHP) : " . date('Y-m-d H:i:s') . "\n";
     
-    // Simulation d'un panier de 20 min
     $temps = 20;
     
     echo "--- Test ASAP ---\n";

@@ -13,11 +13,9 @@ try {
 $action = $_GET['action'] ?? '';
 
 if ($action === 'results') {
-    // On calcule la plage du lundi au jeudi de la semaine en cours
     $lundi = date('Y-m-d', strtotime('monday this week'));
     $jeudi = date('Y-m-d', strtotime('thursday this week'));
     
-    // On compte les votes cumulés par plat_index pour ce cycle
     $stmt = $pdo->prepare("SELECT plat_index, COUNT(*) as count FROM votes_menu WHERE (vote_date BETWEEN ? AND ?) AND plat_index IS NOT NULL GROUP BY plat_index");
     $stmt->execute([$lundi, $jeudi]);
     $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -39,7 +37,6 @@ if ($action === 'results') {
 }
 
 if ($action === 'vote') {
-    // Vérification du jour (Mon-Thu only)
     $num_jour = (int)date('N');
     if ($num_jour < 1 || $num_jour > 4) {
         echo json_encode(['error' => 'Le système de vote est fermé. Revenez lundi !']);
@@ -59,7 +56,6 @@ if ($action === 'vote') {
         exit;
     }
 
-    // Vérifier si déjà voté dans ce CYCLE hebdomadaire
     $stmt = $pdo->prepare("SELECT id FROM votes_menu WHERE phone_number = ? AND (vote_date BETWEEN ? AND ?)");
     $stmt->execute([$tel, $lundi, $jeudi]);
     if ($stmt->fetch()) {

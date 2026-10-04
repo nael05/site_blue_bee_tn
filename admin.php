@@ -1,5 +1,4 @@
 <?php
-// --- BLINDAGE SÉCURITÉ SESSIONS & HEADERS ---
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
 ini_set('session.cookie_samesite', 'Lax'); // Permet le retour depuis Stripe
@@ -51,12 +50,10 @@ try {
     die("Le service est temporairement indisponible.");
 }
 
-// Logique de Statistiques pour le Dashboard
 $total_plats_actifs = $pdo->query("SELECT COUNT(*) FROM carte_restaurant WHERE est_disponible = 1")->fetchColumn();
 $total_plats_rupture = $pdo->query("SELECT COUNT(*) FROM carte_restaurant WHERE est_disponible = 0")->fetchColumn();
 $votes_aujourdhui = $pdo->query("SELECT COUNT(*) FROM votes_menu WHERE vote_date = CURDATE()")->fetchColumn();
 
-// Calcul du prochain créneau/status
 $stmtSet = $pdo->query("SELECT s_key, s_value FROM commandes_settings");
 $settings_db = [];
 foreach ($stmtSet->fetchAll(PDO::FETCH_ASSOC) as $s) { $settings_db[$s['s_key']] = $s['s_value']; }
@@ -128,7 +125,6 @@ if (isset($_POST['enregistrer']) && hash_equals($_SESSION['csrf_token'], $_POST[
 if (isset($_POST['supprimer']) && hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
     $id = $_POST['plat_id'];
     
-    // Nettoyage de l'image sur le serveur
     $stmtImg = $pdo->prepare("SELECT image_url FROM carte_restaurant WHERE id = ?");
     $stmtImg->execute([$id]);
     $oldImg = $stmtImg->fetchColumn();
@@ -198,7 +194,6 @@ if (isset($_POST['sauvegarder_settings']) && hash_equals($_SESSION['csrf_token']
     foreach ($keys as $k) {
         if (isset($_POST[$k])) {
             $val = trim((string)$_POST[$k]);
-            // Validation email pour restaurant_email
             if ($k === 'restaurant_email' && $val !== '' && !filter_var($val, FILTER_VALIDATE_EMAIL)) {
                 header("Location: admin.php?error=invalid_email#tab-commandes");
                 exit;
@@ -241,7 +236,6 @@ $total_votes_semaine = array_sum(array_column($vote_results_live, 'cnt'));
 $stmt = $pdo->query("SELECT * FROM carte_restaurant ORDER BY categorie, nom");
 $plats = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Détection des conflits de vote
 $conflits = [];
 $dateJeudi = date('Y-m-d', strtotime('thursday this week'));
 $stmtC = $pdo->prepare("SELECT plat_index, COUNT(*) as cnt FROM votes_menu WHERE vote_date = ? GROUP BY plat_index ORDER BY cnt DESC");

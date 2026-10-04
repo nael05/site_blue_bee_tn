@@ -11,7 +11,6 @@ function calculerTempsPanier($panier, $reduction_doublon) {
         $qty = (int) $item['qty'];
         if ($qty <= 0) continue;
 
-        // Le 1er prend le temps plein, les suivants prennent le temps réduit
         $temps_ligne = $temps_base + (($qty - 1) * max(0, $temps_base - $reduction_doublon));
         $temps_total += $temps_ligne;
     }
@@ -54,8 +53,6 @@ function trouverDisponibilite($temps_total_prep, $type_commande, $heure_souhaite
         $meilleure_piste = 1;
 
         for ($piste = 1; $piste <= $nombre_pistes; $piste++) {
-            // Récupérer toutes les commandes à venir sur cette piste, triées
-            // On inclut 'en attente' ET 'attente_paiement' (si récent < 15 min)
             $stmt = $pdo->prepare("SELECT heure_debut_prep, heure_fin_estimee FROM commandes 
                                    WHERE DATE(date_commande) = CURDATE() 
                                    AND piste_id = ? 
@@ -74,8 +71,6 @@ function trouverDisponibilite($temps_total_prep, $type_commande, $heure_souhaite
                 $cmd_debut = new DateTime($cmd['heure_debut_prep']);
                 $cmd_fin = new DateTime($cmd['heure_fin_estimee']);
 
-                // Si l'espace avant cette commande est suffisant
-                // invert=1 signifie que $cmd_debut < $debut_piste (commande déjà commencée) → pas de créneau libre
                 $interval = $debut_piste->diff($cmd_debut);
                 $minutes_libres = $interval->invert ? 0 : (($interval->days * 24 * 60) + ($interval->h * 60) + $interval->i);
 
@@ -103,7 +98,6 @@ function trouverDisponibilite($temps_total_prep, $type_commande, $heure_souhaite
         ];
 
     } else {
-        // Logique "Planifié" (ex: 13:00)
         $target_fin = new DateTime(date('Y-m-d ') . $heure_souhaitee);
         $target_debut = clone $target_fin;
         $target_debut->modify("-$temps_total_prep minutes");
@@ -113,7 +107,6 @@ function trouverDisponibilite($temps_total_prep, $type_commande, $heure_souhaite
         }
 
         for ($piste = 1; $piste <= $nombre_pistes; $piste++) {
-            // Vérifier si la piste est occupée entre target_debut et target_fin
             $stmt = $pdo->prepare("SELECT COUNT(*) FROM commandes 
                                    WHERE DATE(date_commande) = CURDATE() 
                                    AND piste_id = ? 
@@ -124,7 +117,6 @@ function trouverDisponibilite($temps_total_prep, $type_commande, $heure_souhaite
             $stmt->execute([$piste, $target_fin->format('Y-m-d H:i:s'), $target_debut->format('Y-m-d H:i:s')]);
             
             if ($stmt->fetchColumn() == 0) {
-                // Piste libre !
                 return [
                     'piste_id' => $piste,
                     'heure_debut' => $target_debut->format('Y-m-d H:i:s'),

@@ -25,7 +25,6 @@ date_default_timezone_set('Europe/Paris');
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/mailer_brevo.php';
 
-// === Securisation pour acces HTTP ===
 $is_cli = (PHP_SAPI === 'cli');
 if (!$is_cli) {
     $token = $_GET['token'] ?? '';
@@ -35,13 +34,11 @@ if (!$is_cli) {
     }
 }
 
-// === Date cible (par defaut : aujourd'hui) ===
 $target_date = $_GET['date'] ?? date('Y-m-d');
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $target_date)) {
     $target_date = date('Y-m-d');
 }
 
-// === Connexion DB ===
 try {
     $pdo = new PDO(
         "mysql:host=".DB_HOST.";dbname=".DB_NAME.";charset=utf8mb4",
@@ -52,7 +49,6 @@ try {
     die('DB error: ' . $e->getMessage());
 }
 
-// === Recuperation de l'email du resto ===
 $resto_email = get_restaurant_email($pdo);
 if ($resto_email === '') {
     echo "Pas d'email restaurant configure dans admin. Recap non envoye.\n";
@@ -60,7 +56,6 @@ if ($resto_email === '') {
     exit(0);
 }
 
-// === Recuperation des commandes payees du jour ===
 $stmt = $pdo->prepare("
     SELECT id, client_nom, client_tel, client_email, heure_retrait,
            details_panier, statut, date_commande, piste_id
@@ -78,7 +73,6 @@ if (empty($commandes)) {
     exit(0);
 }
 
-// === Aggregation des stats ===
 $nb_commandes = count($commandes);
 $total_jour   = 0.0;
 $nb_terminees = 0;
@@ -110,10 +104,8 @@ foreach ($commandes as $cmd) {
     }
 }
 
-// Tri des articles par quantite decroissante
 uasort($articles_agg, fn($a, $b) => $b['qty'] <=> $a['qty']);
 
-// === Construction du HTML ===
 $date_fr = date('d/m/Y', strtotime($target_date));
 
 $html  = '<div style="font-family:Arial,sans-serif; max-width:700px; margin:0 auto; color:#333;">';
@@ -123,7 +115,6 @@ $html .= '<p style="margin:8px 0 0; font-size:18px;">Recapitulatif du ' . $date_
 $html .= '</div>';
 $html .= '<div style="background:white; padding:25px; border:1px solid #e2e8f0; border-top:0;">';
 
-// Cartes stats
 $html .= '<div style="display:flex; gap:10px; margin-bottom:25px; flex-wrap:wrap;">';
 $html .= '<div style="flex:1; min-width:140px; background:#dbeafe; padding:15px; border-radius:10px; text-align:center;">';
 $html .= '<div style="font-size:32px; font-weight:bold; color:#1e40af;">' . $nb_commandes . '</div>';
@@ -139,7 +130,6 @@ $html .= '<div style="font-size:32px; font-weight:bold; color:#9d174d;">' . numb
 $html .= '<div style="font-size:13px; color:#831843;">CA du jour</div></div>';
 $html .= '</div>';
 
-// Top articles
 $html .= '<h3 style="border-bottom:2px solid #005599; padding-bottom:8px;">Articles vendus</h3>';
 $html .= '<table style="width:100%; border-collapse:collapse; margin-bottom:25px;">';
 $html .= '<thead><tr style="background:#005599; color:white;">';
@@ -156,7 +146,6 @@ foreach ($articles_agg as $nom => $info) {
 }
 $html .= '</tbody></table>';
 
-// Detail commandes
 $html .= '<h3 style="border-bottom:2px solid #005599; padding-bottom:8px;">Detail des commandes</h3>';
 $html .= '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
 $html .= '<thead><tr style="background:#f1f5f9;">';
@@ -198,7 +187,6 @@ $html .= '<div style="text-align:center; padding:15px; font-size:12px; color:#94
 $html .= 'BlueBeeTN - Rapport automatique du ' . $date_fr;
 $html .= '</div></div>';
 
-// === Envoi ===
 $res = envoyer_email_brevo(
     $resto_email,
     'Cuisine BlueBeeTN',

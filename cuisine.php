@@ -1,5 +1,4 @@
 <?php
-// --- BLINDAGE SÉCURITÉ SESSIONS & HEADERS ---
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
 ini_set('session.cookie_samesite', 'Lax');
@@ -75,13 +74,11 @@ try {
 if (isset($_POST['action']) && $_POST['action'] == 'terminer' && isset($_POST['id'])) {
     if (!hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) { exit; }
     $id = (int)$_POST['id'];
-    // On met le statut à terminé ET on règle l'heure de fin estimée sur MAINTENANT pour libérer la piste
     $stmt = $pdo->prepare("UPDATE commandes SET statut = 'terminé', heure_fin_estimee = NOW() WHERE id = ?");
     $stmt->execute([$id]);
     exit;
 }
 
-// Marquage d'une commande comme "ticket imprimé" (appelé par ticket_print.php après window.print)
 if (isset($_POST['action']) && $_POST['action'] === 'marquer_imprime' && isset($_POST['id'])) {
     if (!hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'] ?? '')) { exit; }
     $id = (int)$_POST['id'];
@@ -368,7 +365,6 @@ if (isset($_GET['ajax'])) {
         if (soundEnabled) {
             btn.classList.add('active');
             btn.innerHTML = '<i class="fa-solid fa-volume-high"></i> <span>Audio Actif</span>';
-            // Créer et débloquer l'AudioContext lors de l'interaction utilisateur
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             audioCtx.resume().then(() => playDing());
         } else {
@@ -380,7 +376,6 @@ if (isset($_GET['ajax'])) {
     function playDing() {
         if (!soundEnabled || !audioCtx) return;
         try {
-            // 3 bips successifs
             [0, 0.3, 0.6].forEach(offset => {
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
@@ -412,12 +407,10 @@ if (isset($_GET['ajax'])) {
             loader.style.width = '100%';
             setTimeout(() => loader.style.width = '0', 300);
 
-            // On compte le nombre de commandes dans le HTML reçu
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = html;
             const currentCount = tempDiv.querySelectorAll('.order-card').length;
 
-            // Si c'est un refresh de l'onglet "en cours" et qu'il y a de nouvelles commandes
             if (ongletActuel === 'encours' && lastOrderCount !== -1 && currentCount > lastOrderCount) {
                 playDing();
             }
@@ -425,19 +418,14 @@ if (isset($_GET['ajax'])) {
             lastOrderCount = currentCount;
             document.getElementById('grille-tickets').innerHTML = html;
 
-            // Auto-impression : pour toute commande "en attente" pas encore imprimee
             if (ongletActuel === 'encours') {
                 declencherImpressionsAuto();
             }
         });
     }
 
-    // Set des IDs deja envoyes a l'imprimante dans CETTE session du navigateur
-    // (evite de relancer l'impression au tour suivant si le serveur n'a pas encore
-    // enregistre le marquage)
     const ticketsEnvoyes = new Set();
 
-    // Restaurer l'etat du toggle "double impression" depuis localStorage
     const chkDouble = document.getElementById('chk-double-print');
     if (chkDouble) {
         chkDouble.checked = localStorage.getItem('bbn_double_print') === '1';
@@ -468,11 +456,9 @@ if (isset($_GET['ajax'])) {
     }
 
     function reimprimerTicket(id) {
-        // Ouvre un onglet visible pour la reimpression manuelle
         window.open(`ticket_print.php?id=${id}&auto=1&copies=${getCopies()}`, '_blank', 'width=400,height=700');
     }
 
-    // Quand un iframe a fini d'imprimer, il nous le signale via postMessage : on le retire
     window.addEventListener('message', (e) => {
         if (e.origin !== window.location.origin) return;
         if (e.data && e.data.type === 'ticket_printed') {
@@ -482,7 +468,6 @@ if (isset($_GET['ajax'])) {
                     setTimeout(() => f.remove(), 1000);
                 }
             });
-            // Mettre a jour l'attribut sur la carte
             const card = document.getElementById('card-' + e.data.id);
             if (card) card.dataset.ticketImprime = '1';
         }
@@ -502,7 +487,6 @@ if (isset($_GET['ajax'])) {
 
         fetch(`cuisine.php`, { method: 'POST', body: formData })
         .then(() => {
-            // On décrémente pour ne pas redéclencher le ding au refresh après suppression
             lastOrderCount--;
             chargerCommandes();
         });
