@@ -63,6 +63,22 @@ $closed_days = json_decode($settings_db['closed_days'] ?? '[]', true);
 $nom_jour_fr = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'][date('w')];
 if (in_array($nom_jour_fr, $closed_days)) { $shop_active = false; }
 
+function nom_image_plat(string $nom, string $extension, string $suffix = ''): string
+{
+    $base = strtr($nom, [
+        'À' => 'A', 'Â' => 'A', 'Ä' => 'A', 'à' => 'a', 'â' => 'a', 'ä' => 'a',
+        'Ç' => 'C', 'ç' => 'c', 'É' => 'E', 'È' => 'E', 'Ê' => 'E', 'Ë' => 'E',
+        'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e', 'Î' => 'I', 'Ï' => 'I',
+        'î' => 'i', 'ï' => 'i', 'Ô' => 'O', 'Ö' => 'O', 'ô' => 'o', 'ö' => 'o',
+        'Ù' => 'U', 'Û' => 'U', 'Ü' => 'U', 'ù' => 'u', 'û' => 'u', 'ü' => 'u',
+        'Ÿ' => 'Y', 'ÿ' => 'y',
+    ]);
+    $base = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $base);
+    $base = strtolower(trim((string) preg_replace('/[^a-zA-Z0-9]+/', '_', $base), '_'));
+    $base = $base !== '' ? $base : 'plat';
+    return $base . $suffix . '.' . strtolower($extension);
+}
+
 
 $plat_a_modifier = null;
 if (isset($_GET['modifier'])) {
@@ -88,23 +104,45 @@ if (isset($_POST['enregistrer']) && hash_equals($_SESSION['csrf_token'], $_POST[
         }
     }
 
-    if (isset($_FILES['image_upload']) && $_FILES['image_upload']['error'] === UPLOAD_ERR_OK) {
-        $file_tmp = $_FILES['image_upload']['tmp_name'];
-        $check = getimagesize($file_tmp);
-        
-        if ($check !== false) {
+    $upload_error = null;
+    if (isset($_FILES['image_upload']) && $_FILES['image_upload']['error'] !== UPLOAD_ERR_NO_FILE) {
+        $upload_status = $_FILES['image_upload']['error'];
+        if ($upload_status !== UPLOAD_ERR_OK) {
+            $upload_error = $upload_status === UPLOAD_ERR_INI_SIZE || $upload_status === UPLOAD_ERR_FORM_SIZE
+                ? 'La photo est trop lourde. Elle doit faire moins de 5 Mo.'
+                : 'La photo n’a pas pu être envoyée (erreur ' . $upload_status . ').';
+        } else {
+            $file_tmp = $_FILES['image_upload']['tmp_name'];
+            $check = getimagesize($file_tmp);
             $allowed_types = ['image/jpeg', 'image/png', 'image/webp'];
-            if (in_array($check['mime'], $allowed_types)) {
-                $nomFichierOriginal = basename($_FILES['image_upload']['name']);
-                $nomFichierSecurise = preg_replace('/[^a-zA-Z0-9.\-_]/', '_', $nomFichierOriginal);
-                $nomFichierFinal = time() . '_' . $nomFichierSecurise;
+            if ($check === false || !in_array($check['mime'], $allowed_types, true)) {
+                $upload_error = 'Format refusé. Utilisez une image JPG, PNG ou WebP.';
+            } else {
+                $extensions = [
+                    'image/jpeg' => 'jpg',
+                    'image/png' => 'png',
+                    'image/webp' => 'webp',
+                ];
+                $extension = $extensions[$check['mime']];
+                $nomFichierFinal = nom_image_plat($nom, $extension);
+                $suffixe = 2;
+                while (file_exists('images/' . $nomFichierFinal)) {
+                    $nomFichierFinal = nom_image_plat($nom, $extension, '-' . $suffixe++);
+                }
                 $cheminDestination = 'images/' . $nomFichierFinal;
-                
                 if (move_uploaded_file($file_tmp, $cheminDestination)) {
                     $img = $nomFichierFinal;
+                } else {
+                    $upload_error = 'La photo n’a pas pu être enregistrée dans le dossier images.';
                 }
             }
         }
+    }
+
+    if ($upload_error !== null) {
+        header('Location: admin.php?error=upload#tab-carte');
+        $_SESSION['admin_upload_error'] = $upload_error;
+        exit;
     }
 
     $temps_prep = $_POST['temps_prep_min'] ?? 5;
@@ -261,6 +299,7 @@ if (!empty($all_votes)) {
     <title>BlueBeeTN | Dashboard Majestic</title>
     <link href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
     <style>
         :root {
             --sidi-blue: #005599;
@@ -417,6 +456,16 @@ if (!empty($all_votes)) {
             z-index: 2000; display: flex; align-items: center; gap: 15px; font-weight: 800; animation: bounceInUp 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
         }
         @keyframes bounceInUp { from { transform: translate(-50%, 100px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+
+        .crop-modal { position: fixed; inset: 0; z-index: 3000; display: none; align-items: center; justify-content: center; padding: 20px; background: rgba(0, 30, 60, 0.78); }
+        .crop-modal.is-open { display: flex; }
+        .crop-panel { width: min(760px, 100%); max-height: calc(100vh - 40px); overflow: auto; background: white; border-radius: 18px; padding: 22px; box-shadow: 0 24px 80px rgba(0,0,0,0.3); }
+        .crop-stage { width: 100%; height: min(62vh, 560px); background: #102a43; }
+        .crop-stage img { display: block; max-width: 100%; }
+        .crop-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 18px; }
+        .crop-actions button { border: 0; border-radius: 10px; padding: 12px 18px; font: inherit; font-weight: 800; cursor: pointer; }
+        .crop-cancel { background: #e2e8f0; color: var(--sidi-dark); }
+        .crop-confirm { background: var(--sidi-blue); color: white; }
         
         .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
         .switch input { opacity: 0; width: 0; height: 0; }
@@ -479,6 +528,14 @@ if (!empty($all_votes)) {
         </div>
         <script>setTimeout(() => document.getElementById('toast').style.opacity='0', 3000);</script>
     <?php endif; ?>
+    <?php if (isset($_GET['error']) && $_GET['error'] === 'upload'): ?>
+        <div class="success-toast" id="toast" style="color: #991b1b; border-left-color: #ef4444;">
+            <i class="fa-solid fa-circle-exclamation" style="font-size: 1.8rem;"></i>
+            <span><?= htmlspecialchars($_SESSION['admin_upload_error'] ?? 'La photo n’a pas pu être mise à jour.') ?></span>
+        </div>
+        <?php unset($_SESSION['admin_upload_error']); ?>
+        <script>setTimeout(() => document.getElementById('toast').style.opacity='0', 5000);</script>
+    <?php endif; ?>
 
     <div class="admin-tabs">
         <button class="tab-btn active" onclick="switchTab('tab-carte')"><i class="fa-solid fa-tags"></i> La Carte</button>
@@ -509,7 +566,7 @@ if (!empty($all_votes)) {
                     <div id="stock_input_container" style="<?= ($plat_a_modifier['type_stock'] ?? 'infini') === 'reel' ? '' : 'display:none;' ?>">
                         <input type="number" name="stock_actuel" placeholder="Quantité dispo" value="<?= $plat_a_modifier['stock_actuel'] ?? '0' ?>">
                     </div>
-                    <input type="file" name="image_upload" accept="image/*">
+                    <input type="file" id="image_upload" name="image_upload" accept="image/jpeg,image/png,image/webp">
                 </div>
                 <textarea name="description" placeholder="Une description qui donne l'eau à la bouche..." style="margin-top: 20px; height: 100px;"><?= htmlspecialchars($plat_a_modifier['description'] ?? '') ?></textarea>
                 <button type="submit" name="enregistrer" class="btn-majestic" style="width: 100%; margin-top: 25px;"><i class="fa-solid fa-cloud-arrow-up"></i> Sauvegarder dans la Gazette</button>
@@ -718,7 +775,81 @@ if (!empty($all_votes)) {
     </section>
 </div>
 
+<div class="crop-modal" id="crop-modal" aria-hidden="true">
+    <div class="crop-panel" role="dialog" aria-modal="true" aria-labelledby="crop-title">
+        <h3 id="crop-title" style="margin-top:0;">Recadrer la photo</h3>
+        <div class="crop-stage"><img id="crop-image" alt="Aperçu de la photo à recadrer"></div>
+        <div class="crop-actions">
+            <button type="button" class="crop-cancel" id="crop-cancel">Annuler</button>
+            <button type="button" class="crop-confirm" id="crop-confirm"><i class="fa-solid fa-crop-simple"></i> Utiliser ce cadrage</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
 <script>
+    let imageCropper = null;
+    const imageInput = document.getElementById('image_upload');
+    const cropModal = document.getElementById('crop-modal');
+    const cropImage = document.getElementById('crop-image');
+    const cropForm = imageInput?.form;
+    let cropFileName = 'photo.jpg';
+
+    function closeCropModal(clearInput) {
+        cropModal.classList.remove('is-open');
+        cropModal.setAttribute('aria-hidden', 'true');
+        if (imageCropper) {
+            imageCropper.destroy();
+            imageCropper = null;
+        }
+        cropImage.removeAttribute('src');
+        if (clearInput) imageInput.value = '';
+    }
+
+    imageInput?.addEventListener('change', () => {
+        const file = imageInput.files?.[0];
+        if (!file) return;
+        cropFileName = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+        cropImage.src = URL.createObjectURL(file);
+        cropModal.classList.add('is-open');
+        cropModal.setAttribute('aria-hidden', 'false');
+        cropImage.onload = () => {
+            imageCropper = new Cropper(cropImage, {
+                aspectRatio: 1,
+                viewMode: 1,
+                dragMode: 'move',
+                autoCropArea: 0.9,
+                responsive: true,
+                background: false,
+                guides: true,
+                center: true,
+                cropBoxMovable: false,
+                cropBoxResizable: false,
+                minContainerWidth: 280,
+                minContainerHeight: 280
+            });
+        };
+    });
+
+    document.getElementById('crop-cancel')?.addEventListener('click', () => closeCropModal(true));
+    document.getElementById('crop-confirm')?.addEventListener('click', () => {
+        if (!imageCropper) return;
+        imageCropper.getCroppedCanvas({ width: 1200, height: 1200, imageSmoothingQuality: 'high' }).toBlob(blob => {
+            const croppedFile = new File([blob], cropFileName, { type: 'image/jpeg', lastModified: Date.now() });
+            const transfer = new DataTransfer();
+            transfer.items.add(croppedFile);
+            imageInput.files = transfer.files;
+            closeCropModal(false);
+        }, 'image/jpeg', 0.9);
+    });
+
+    cropForm?.addEventListener('submit', event => {
+        if (imageInput.files.length && !imageInput.files[0].type.match(/^image\/(jpeg|png|webp)$/)) {
+            event.preventDefault();
+            alert('Veuillez sélectionner une image JPG, PNG ou WebP.');
+        }
+    });
+
     function switchTab(tabId) {
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
